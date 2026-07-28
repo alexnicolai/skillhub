@@ -43,7 +43,22 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showNewSkill) { NewSkillSheet() }
         .sheet(isPresented: $showInstall) { InstallSheet() }
-        .sheet(isPresented: $state.showQuickOpen) { QuickOpenView() }
+        // Quick open is an overlay, not a sheet: click anywhere outside (or esc)
+        // dismisses it.
+        .overlay {
+            if state.showQuickOpen {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.001)
+                        .contentShape(Rectangle())
+                        .onTapGesture { state.showQuickOpen = false }
+                    QuickOpenView()
+                        .padding(.top, 90)
+                }
+                .ignoresSafeArea()
+                .transition(Motion.popIn(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(Motion.small, value: state.showQuickOpen)
         // Menu-less access points for the command shortcuts.
         .background {
             Group {
@@ -69,6 +84,14 @@ struct DashboardView: View {
             SkillRowView(skill: skill)
                 .tag(skill.name)
                 .draggable(skill.name)
+                // Explicit brand selection: the system accent overrides
+                // NSAccentColorName when the user picked a fixed accent colour.
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(state.selectedSkillNames.contains(skill.name)
+                              ? Color.brand.opacity(0.24) : .clear)
+                        .padding(.horizontal, 6)
+                )
                 .contextMenu {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])

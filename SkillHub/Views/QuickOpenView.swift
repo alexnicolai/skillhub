@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// ⌘K — fuzzy jump to any skill. With hundreds of skills this is the fastest
-/// navigation there is.
+/// ⌘K — fuzzy jump to any skill, presented as an overlay palette.
+/// Click outside or press esc to dismiss.
 struct QuickOpenView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
     @State private var highlighted = 0
     @FocusState private var focused: Bool
 
-    private var matches: [Skill] {
-        QuickOpenView.rank(appState.skills, query: query)
-    }
+    /// Results held in state and recomputed on every keystroke — a computed
+    /// property fed into a lazy stack went stale (rows keyed by index were
+    /// cached with old content).
+    @State private var matches: [Skill] = []
 
     /// Subsequence fuzzy match; prefix + name hits rank first.
     static func rank(_ skills: [Skill], query: String) -> [Skill] {
@@ -24,7 +24,6 @@ struct QuickOpenView: View {
             let name = skill.name.lowercased()
             if name.hasPrefix(q) { return 1000 - name.count }
             if name.contains(q) { return 500 - name.count }
-            // subsequence on name
             var it = q.startIndex
             for ch in name where it < q.endIndex && ch == q[it] {
                 it = q.index(after: it)
@@ -51,63 +50,85 @@ struct QuickOpenView: View {
                     .focused($focused)
                     .onSubmit { open(at: highlighted) }
                     .onKeyPress(.downArrow) {
-                        highlighted = min(highlighted + 1, matches.count - 1); return .handled
+                        highlighted = min(highlighted + 1, max(matches.count - 1, 0))
+                        return .handled
                     }
                     .onKeyPress(.upArrow) {
-                        highlighted = max(highlighted - 1, 0); return .handled
+                        highlighted = max(highlighted - 1, 0)
+                        return .handled
                     }
             }
             .padding(12)
 
             Divider()
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(Array(matches.enumerated()), id: \.element.name) { index, skill in
-                            Button {
-                                open(at: index)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Text(skill.name).font(AppText.bodySemibold)
-                                    Text(skill.summary)
-                                        .font(AppText.secondary)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    ForEach(skill.tags.prefix(2), id: \.self) { tag in
-                                        Text("#\(tag)")
-                                            .font(AppText.small)
-                                            .foregroundStyle(Color.brand)
+            if matches.isEmpty {
+                Text("No matching skills")
+                    .font(AppText.secondary)
+                    .foregroundStyle(.secondary)
+                    .padding(16)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 1) {
+                            ForEach(Array(matches.enumerated()), id: \.element.name) { index, skill in
+                                Button {
+                                    open(at: index)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Text(skill.name).font(AppText.bodySemibold)
+                                        Text(skill.summary)
+                                            .font(AppText.secondary)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        ForEach(skill.tags.prefix(2), id: \.self) { tag in
+                                            Text("#\(tag)")
+                                                .font(AppText.small)
+                                                .foregroundStyle(Color.brand)
+                                        }
                                     }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(
+                                        index == highlighted ? Color.brand.opacity(0.18) : .clear,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .background(
-                                    index == highlighted ? Color.brand.opacity(0.15) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 6)
-                                )
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
-                            .id(index)
+                        }
+                        .padding(6)
+                    }
+                    .frame(maxHeight: 320)
+                    .onChange(of: highlighted) {
+                        if matches.indices.contains(highlighted) {
+                            proxy.scrollTo(matches[highlighted].name)
                         }
                     }
-                    .padding(6)
                 }
-                .frame(maxHeight: 320)
-                .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
             }
         }
         .frame(width: 560)
-        .onAppear { focused = true }
-        .onChange(of: query) { highlighted = 0 }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.3), radius: 28, y: 10)
+        .onAppear {
+            focused = true
+            matches = QuickOpenView.rank(appState.skills, query: "")
+        }
+        .onChange(of: query) {
+            matches = QuickOpenView.rank(appState.skills, query: query)
+            highlighted = 0
+        }
+        .onExitCommand { appState.showQuickOpen = false }
     }
 
     private func open(at index: Int) {
         guard matches.indices.contains(index) else { return }
         appState.sidebarSelection = .all
         appState.selectedSkillNames = [matches[index].name]
-        dismiss()
+        appState.showQuickOpen = false
     }
 }

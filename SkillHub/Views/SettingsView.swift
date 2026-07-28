@@ -89,6 +89,19 @@ struct SettingsView: View {
                 Text("A symlink is a shortcut: the tool's skill folder just points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate instead, which SkillHub re-syncs by comparing checksums. Keep Symlink unless a tool proves unable to read skills through them.")
             }
 
+            Section("Keyboard shortcuts") {
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
+                    shortcutRow("⌘K", "Go to skill (fuzzy search)")
+                    shortcutRow("⌘N", "New skill")
+                    shortcutRow("⇧⌘I", "Install from GitHub")
+                    shortcutRow("⇧⌘G", "Git sync panel")
+                    shortcutRow("⌘R", "Refresh catalog + check updates")
+                    shortcutRow("⌘S", "Save (in the skill editor)")
+                    shortcutRow("⌘,", "Settings")
+                }
+                .padding(.vertical, 2)
+            }
+
             Section {
                 Toggle("Launch SkillHub at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
@@ -112,6 +125,20 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .padding()
+    }
+
+    private func shortcutRow(_ keys: String, _ what: String) -> some View {
+        GridRow {
+            Text(keys)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+                .gridColumnAlignment(.trailing)
+            Text(what)
+                .font(AppText.secondary)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func linkModeBinding(for tool: Tool) -> Binding<LinkMode> {

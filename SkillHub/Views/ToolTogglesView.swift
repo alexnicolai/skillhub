@@ -7,7 +7,7 @@ struct ToolTogglesView: View {
     let skill: Skill
 
     var body: some View {
-        HStack(spacing: 6) {
+        FlowLayout(spacing: 6, rowSpacing: 6) {
             ForEach(Tool.allCases) { tool in
                 TogglePill(
                     tool: tool,

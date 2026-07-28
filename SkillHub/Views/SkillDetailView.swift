@@ -11,6 +11,8 @@ struct SkillDetailView: View {
     @State private var showDiff = false
     @State private var upstreamDiff = ""
     @State private var diffLoading = false
+    @State private var showIssues = false
+    @State private var historyEntries: [GitService.HistoryEntry] = []
 
     enum Tab: Int, CaseIterable {
         case preview, edit, files, info
@@ -63,17 +65,36 @@ struct SkillDetailView: View {
         }
         .navigationTitle(skill.name)
         .toolbar {
-            ToolbarItem(placement: .secondaryAction) {
-                ShareMenu(skill: skill)
-            }
-            ToolbarItem(placement: .destructiveAction) {
-                Button(role: .destructive) {
-                    confirmDelete = true
+            // One overflow menu instead of scattered lone icons.
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder")
+                    }
+                    ShareMenu(skill: skill)
+                    Divider()
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Label("Remove from Hub…", systemImage: "trash")
+                    }
                 } label: {
-                    Label("Remove Skill", systemImage: "trash")
+                    Label("More", systemImage: "ellipsis.circle")
                 }
-                .help("Remove \(skill.name) from the hub and from every tool using it")
+                .help("Reveal, share, or remove this skill")
             }
+        }
+        // Loading history in .task (not during body evaluation) — the git
+        // subprocess in the Form was wedging the tab transition until the next
+        // window event.
+        .task(id: skill.name) {
+            let name = skill.name
+            let entries = await Task.detached {
+                GitService().history(path: "skills/\(name)", limit: 8)
+            }.value
+            if name == skill.name { historyEntries = entries }
         }
         .sheet(isPresented: $showDiff) {
             DiffSheet(
@@ -215,6 +236,43 @@ struct SkillDetailView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .padding(.top, 6)
+
+            if !skill.issues.isEmpty {
+                Button {
+                    showIssues = true
+                } label: {
+                    Label(
+                        skill.issues.count == 1
+                            ? skill.issues[0].message
+                            : "\(skill.issues.count) issues found",
+                        systemImage: skill.hasErrors ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill"
+                    )
+                    .font(AppText.secondary.weight(.medium))
+                    .lineLimit(1)
+                }
+                .buttonStyle(PressableButtonStyle())
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background((skill.hasErrors ? Color.red : .orange).opacity(0.12), in: Capsule())
+                .foregroundStyle(skill.hasErrors ? Color.red : .orange)
+                .padding(.top, 8)
+                .help("Click for details")
+                .popover(isPresented: $showIssues, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(skill.issues.enumerated()), id: \.offset) { _, issue in
+                            Label {
+                                Text(issue.message).font(AppText.secondary)
+                            } icon: {
+                                Image(systemName: issue.severity == .error
+                                      ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(issue.severity == .error ? .red : .orange)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: 400)
+                }
+            }
 
             if let updateError {
                 Label(updateError, systemImage: "exclamationmark.triangle.fill")
@@ -369,13 +427,12 @@ struct SkillDetailView: View {
                 }
             }
             Section("History") {
-                let entries = GitService().history(path: "skills/\(skill.name)", limit: 8)
-                if entries.isEmpty {
+                if historyEntries.isEmpty {
                     Text("No commits recorded yet.")
                         .font(AppText.secondary)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(entries.enumerated()), id: \.element.sha) { index, entry in
+                    ForEach(Array(historyEntries.enumerated()), id: \.element.sha) { index, entry in
                         HStack(spacing: 8) {
                             Text(String(entry.sha.prefix(7)))
                                 .font(AppText.mono)

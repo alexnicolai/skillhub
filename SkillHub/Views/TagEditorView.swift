@@ -10,7 +10,7 @@ struct TagEditorView: View {
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        FlowLayout(spacing: 6, rowSpacing: 6) {
             ForEach(skill.tags, id: \.self) { tag in
                 TagChip(tag: tag) {
                     appState.removeTag(tag, from: skill.name)
