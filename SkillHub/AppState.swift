@@ -18,7 +18,7 @@ final class AppState {
     var isMigrated: Bool = false
     var loadError: String?
     var searchText: String = ""
-    var selectedSkillName: String?
+    var selectedSkillNames: Set<String> = []
     var sidebarSelection: SidebarItem = .all
     var usage: [String: UsageCache.SkillHit] = [:]
     var updateAvailable: Set<String> = []
@@ -59,6 +59,43 @@ final class AppState {
     private func setTags(_ tags: [String], for skillName: String) {
         manifest.skills[skillName]?.tags = tags.isEmpty ? nil : tags
         persistManifest()
+    }
+
+    // MARK: - Bulk operations
+
+    /// Tag several skills at once (bulk pane, drag-onto-tag).
+    func addTag(_ raw: String, toAll names: some Collection<String>) {
+        guard let tag = Tags.normalize(raw) else { return }
+        for name in names where manifest.skills[name] != nil {
+            var tags = Set(manifest.skills[name]?.tags ?? [])
+            tags.insert(tag)
+            manifest.skills[name]?.tags = tags.sorted()
+        }
+        persistManifest()
+    }
+
+    /// Remove several skills in one pass (single git commit).
+    func deleteSkills(_ names: some Collection<String>) {
+        var kept: [String] = []
+        do {
+            try withSuppressedWatcher {
+                for name in names {
+                    let report = try engine.removeSkill(name)
+                    manifest.skills[name] = nil
+                    kept.append(contentsOf: report.divergentLeft.map { "\(name) (\($0.displayName))" })
+                }
+                try ManifestIO.save(manifest)
+                try? GitService().commit(
+                    paths: ["skills", "skillhub.json"],
+                    message: "SkillHub: remove \(names.count) skills")
+            }
+            loadError = kept.isEmpty ? nil
+                : "Kept locally-modified copies: \(kept.joined(separator: ", "))"
+        } catch {
+            loadError = "Remove failed: \(error.localizedDescription)"
+        }
+        selectedSkillNames.subtract(names)
+        reload()
     }
 
     private func persistManifest() {
@@ -131,7 +168,8 @@ final class AppState {
     }
 
     var selectedSkill: Skill? {
-        selectedSkillName.flatMap { name in skills.first { $0.name == name } }
+        guard selectedSkillNames.count == 1, let name = selectedSkillNames.first else { return nil }
+        return skills.first { $0.name == name }
     }
 
     func reload() {
@@ -228,7 +266,7 @@ final class AppState {
                     loadError = nil
                 }
             }
-            if selectedSkillName == name { selectedSkillName = nil }
+            selectedSkillNames.remove(name)
         } catch {
             loadError = "Remove failed: \(error.localizedDescription)"
         }

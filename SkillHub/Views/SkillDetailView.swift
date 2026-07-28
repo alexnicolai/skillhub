@@ -39,7 +39,7 @@ struct SkillDetailView: View {
                 tabs: Tab.allCases.map { ($0, $0.title) },
                 selection: tabBinding
             )
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .bottom) { Divider() }
 
@@ -127,22 +127,31 @@ struct SkillDetailView: View {
 
     // MARK: - Header
 
+    /// Micro-label for header groups: quiet, uppercase, adds structure without weight.
+    private func groupLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .kerning(0.8)
+            .foregroundStyle(.tertiary)
+    }
+
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Identity: name, update pill, usage.
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(skill.name)
-                    .font(.title2.bold())
+                    .font(.system(size: 24, weight: .bold))
                     .textSelection(.enabled)
                 if skill.updateAvailable {
                     Button {
                         applyUpdate(override: false)
                     } label: {
                         Label("Update Skill File", systemImage: "arrow.down.circle.fill")
-                            .font(.caption.weight(.semibold))
+                            .font(AppText.secondary.weight(.semibold))
                     }
                     .buttonStyle(PressableButtonStyle())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
                     .background(Color.brand.opacity(0.14), in: Capsule())
                     .foregroundStyle(Color.brand)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
@@ -150,8 +159,8 @@ struct SkillDetailView: View {
                 }
                 Spacer()
                 if skill.usageCount > 0 {
-                    Label("\(skill.usageCount)", systemImage: "chart.bar.fill")
-                        .font(.caption.monospacedDigit())
+                    Label("\(skill.usageCount) uses", systemImage: "chart.bar.fill")
+                        .font(AppText.secondary.monospacedDigit())
                         .foregroundStyle(.tertiary)
                         .help("Used \(skill.usageCount) times (Claude Code transcripts)")
                 }
@@ -161,21 +170,32 @@ struct SkillDetailView: View {
                 .font(AppText.body)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-
-            TagEditorView(skill: skill)
+                .padding(.top, 6)
 
             if let updateError {
                 Label(updateError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(AppText.secondary)
                     .foregroundStyle(.orange)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
+                    .padding(.top, 10)
             }
 
-            ToolTogglesView(skill: skill)
-                .padding(.top, 2)
+            // Metadata groups: labeled, evenly spaced, room to breathe.
+            HStack(alignment: .top, spacing: 28) {
+                VStack(alignment: .leading, spacing: 7) {
+                    groupLabel("Tags")
+                    TagEditorView(skill: skill)
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    groupLabel("Available in")
+                    ToolTogglesView(skill: skill)
+                }
+            }
+            .padding(.top, 18)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(Motion.small, value: skill.updateAvailable)
         .animation(Motion.small, value: updateError)

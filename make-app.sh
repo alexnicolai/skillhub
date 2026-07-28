@@ -41,6 +41,12 @@ if [[ ! -f dist/AppIcon.icns ]]; then
 fi
 cp dist/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# Compile the asset catalog: AccentColor drives system selection highlights
+# and controls app-wide via NSAccentColorName.
+xcrun actool Assets.xcassets --compile "$APP/Contents/Resources" \
+  --platform macosx --minimum-deployment-target 14.0 \
+  --output-partial-info-plist /dev/null >/dev/null
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -60,6 +66,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>SUFeedURL</key>                   <string>${APPCAST_URL}</string>
     <key>SUPublicEDKey</key>               <string>${PUBLIC_ED_KEY}</string>
     <key>SUEnableAutomaticChecks</key>     <true/>
+    <key>NSAccentColorName</key>           <string>AccentColor</string>
 </dict>
 </plist>
 PLIST

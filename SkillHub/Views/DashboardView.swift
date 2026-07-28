@@ -5,7 +5,7 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showGitPanel = false
     @State private var showDriftPopover = false
-    @State private var skillPendingRemoval: String?
+    @State private var pendingRemoval: Set<String> = []
 
     var body: some View {
         @Bindable var state = appState
@@ -17,9 +17,12 @@ struct DashboardView: View {
                 }
         } content: {
             // Selection highlight is high-frequency: List stays un-animated.
-            List(state.filteredSkills, selection: $state.selectedSkillName) { skill in
+            // Rows are draggable onto sidebar tags; drag any selected row to
+            // carry the whole selection.
+            List(state.filteredSkills, selection: $state.selectedSkillNames) { skill in
                 SkillRowView(skill: skill)
                     .tag(skill.name)
+                    .draggable(skill.name)
                     .contextMenu {
                         Button {
                             NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
@@ -28,26 +31,33 @@ struct DashboardView: View {
                         }
                         Divider()
                         Button(role: .destructive) {
-                            skillPendingRemoval = skill.name
+                            pendingRemoval = state.selectedSkillNames.contains(skill.name) && state.selectedSkillNames.count > 1
+                                ? state.selectedSkillNames
+                                : [skill.name]
                         } label: {
-                            Label("Remove from Hub…", systemImage: "trash")
+                            let n = state.selectedSkillNames.contains(skill.name)
+                                ? max(state.selectedSkillNames.count, 1) : 1
+                            Label(n > 1 ? "Remove \(n) Skills from Hub…" : "Remove from Hub…",
+                                  systemImage: "trash")
                         }
                     }
             }
             .confirmationDialog(
-                "Remove \(skillPendingRemoval ?? "") from the hub?",
+                pendingRemoval.count > 1
+                    ? "Remove \(pendingRemoval.count) skills from the hub?"
+                    : "Remove \(pendingRemoval.first ?? "") from the hub?",
                 isPresented: Binding(
-                    get: { skillPendingRemoval != nil },
-                    set: { if !$0 { skillPendingRemoval = nil } }
+                    get: { !pendingRemoval.isEmpty },
+                    set: { if !$0 { pendingRemoval = [] } }
                 )
             ) {
                 Button("Remove from Hub and All Tools", role: .destructive) {
-                    if let name = skillPendingRemoval { appState.deleteSkill(name) }
-                    skillPendingRemoval = nil
+                    appState.deleteSkills(pendingRemoval)
+                    pendingRemoval = []
                 }
-                Button("Cancel", role: .cancel) { skillPendingRemoval = nil }
+                Button("Cancel", role: .cancel) { pendingRemoval = [] }
             } message: {
-                Text("Unlinks it from every tool and deletes it from the store. Git history keeps a copy.")
+                Text("Unlinks from every tool and deletes from the store. Git history keeps copies; locally-modified tool copies are never deleted.")
             }
             .searchable(text: $state.searchText, prompt: searchPrompt)
             .navigationSplitViewColumnWidth(min: 300, ideal: 360)
@@ -72,6 +82,10 @@ struct DashboardView: View {
         } detail: {
             if let skill = state.selectedSkill {
                 SkillDetailView(skill: skill)
+            } else if state.selectedSkillNames.count > 1 {
+                BulkActionsView(names: state.selectedSkillNames) {
+                    pendingRemoval = state.selectedSkillNames
+                }
             } else {
                 ContentUnavailableView {
                     Label("Select a skill", systemImage: "wand.and.stars")

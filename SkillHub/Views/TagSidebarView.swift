@@ -27,26 +27,53 @@ struct TagSidebarView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(appState.allTags, id: \.tag) { entry in
-                        Label {
-                            Text(entry.tag)
-                        } icon: {
-                            Image(systemName: "number")
-                                .foregroundStyle(Color.brand)
-                        }
-                        .badge(entry.count)
-                        .tag(SidebarItem.tag(entry.tag))
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                appState.deleteTagEverywhere(entry.tag)
-                            } label: {
-                                Label("Remove Tag from All Skills", systemImage: "trash")
-                            }
-                        }
+                        TagRow(tag: entry.tag, count: entry.count)
+                            .tag(SidebarItem.tag(entry.tag))
                     }
                 }
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("SkillHub")
+    }
+
+    /// One tag row: drop target for skills dragged from the list.
+    private struct TagRow: View {
+        @Environment(AppState.self) private var appState
+        let tag: String
+        let count: Int
+        @State private var targeted = false
+
+        var body: some View {
+            Label {
+                Text(tag)
+            } icon: {
+                Image(systemName: "number")
+                    .foregroundStyle(Color.brand)
+            }
+            .badge(count)
+            .padding(.horizontal, targeted ? 4 : 0)
+            .background(
+                Color.brand.opacity(targeted ? 0.18 : 0),
+                in: RoundedRectangle(cornerRadius: 5)
+            )
+            .animation(Motion.press, value: targeted)
+            .dropDestination(for: String.self) { names, _ in
+                let dropped = names.filter { name in
+                    appState.skills.contains { $0.name == name }
+                }
+                guard !dropped.isEmpty else { return false }
+                appState.addTag(tag, toAll: dropped)
+                return true
+            } isTargeted: { targeted = $0 }
+            .contextMenu {
+                Button(role: .destructive) {
+                    appState.deleteTagEverywhere(tag)
+                } label: {
+                    Label("Remove Tag from All Skills", systemImage: "trash")
+                }
+            }
+            .help("Drop skills here to tag them #\(tag)")
+        }
     }
 }
