@@ -79,7 +79,8 @@ struct CatalogService {
                 liveTools: live,
                 updateAvailable: updateAvailable.contains(name),
                 usageCount: hit?.count ?? 0,
-                lastUsed: hit?.lastUsed
+                lastUsed: hit?.lastUsed,
+                tags: entry?.tags?.sorted() ?? []
             ))
         }
         return skills.sorted { $0.name < $1.name }

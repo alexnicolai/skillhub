@@ -12,6 +12,30 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
+                HStack(spacing: 14) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("SkillHub")
+                            .font(.title3.bold())
+                        Text("Version \(AppVersion.current)")
+                            .font(AppText.secondary)
+                            .foregroundStyle(.secondary)
+                        Link("alexnicolai.github.io/skillhub",
+                             destination: URL(string: "https://alexnicolai.github.io/skillhub/")!)
+                            .font(AppText.small)
+                    }
+                    Spacer()
+                    Button("Check for Updates…") {
+                        AppUpdater.controller.checkForUpdates(nil)
+                    }
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section {
                 LabeledContent("Location") {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([AppPaths.repoRoot])

@@ -62,7 +62,7 @@ struct OnboardingView: View {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 44, weight: .medium))
                 .foregroundStyle(.linearGradient(
-                    colors: [.indigo, .purple], startPoint: .top, endPoint: .bottom))
+                    colors: [Color.brand, .purple], startPoint: .top, endPoint: .bottom))
             Text("Welcome to SkillHub")
                 .font(.title.bold())
             Text("One source of truth for your AI agent skills.")
@@ -259,7 +259,7 @@ struct OnboardingView: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
                 .frame(width: 22)
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.brand)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.callout.weight(.semibold))
                 Text(text).font(.caption).foregroundStyle(.secondary)

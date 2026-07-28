@@ -249,6 +249,7 @@ struct SyncEngine {
                 contentHash: hash,
                 source: provenance,
                 tools: tools,
+                tags: existing.skills[name]?.tags,   // user data — always carried forward
                 addedAt: existing.skills[name]?.addedAt ?? Date()
             )
         }

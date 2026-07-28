@@ -9,30 +9,52 @@ struct ToolTogglesView: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(Tool.allCases) { tool in
-                let isOn = skill.liveTools.contains(tool)
-                Button {
-                    appState.setSkill(skill.name, enabled: !isOn, for: tool)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text(tool.displayName)
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        isOn ? Color.tool(tool).opacity(0.14) : Color.primary.opacity(0.05),
-                        in: Capsule()
-                    )
-                    .foregroundStyle(isOn ? Color.tool(tool) : .secondary)
-                    .contentShape(Capsule())
+                TogglePill(
+                    tool: tool,
+                    isOn: skill.liveTools.contains(tool),
+                    skillName: skill.name
+                ) { enabled in
+                    appState.setSkill(skill.name, enabled: enabled, for: tool)
                 }
-                .buttonStyle(PressableButtonStyle())
-                .help(isOn
-                      ? "Remove \(skill.name) from \(tool.displayName)"
-                      : "Symlink \(skill.name) into \(tool.displayName)")
             }
+        }
+    }
+
+    private struct TogglePill: View {
+        let tool: Tool
+        let isOn: Bool
+        let skillName: String
+        let action: (Bool) -> Void
+        @State private var hovering = false
+
+        var body: some View {
+            Button {
+                action(!isOn)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(tool.displayName)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4.5)
+                .background(
+                    isOn
+                        ? Color.tool(tool).opacity(hovering ? 0.22 : 0.14)
+                        : Color.primary.opacity(hovering ? 0.1 : 0.05),
+                    in: Capsule()
+                )
+                .foregroundStyle(isOn ? Color.tool(tool) : .secondary)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(PressableButtonStyle())
+            .onHover { h in
+                withAnimation(.easeOut(duration: 0.12)) { hovering = h }
+            }
+            .help(isOn
+                  ? "Remove \(skillName) from \(tool.displayName)"
+                  : "Symlink \(skillName) into \(tool.displayName)")
         }
     }
 }

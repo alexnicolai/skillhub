@@ -10,6 +10,12 @@ struct DashboardView: View {
     var body: some View {
         @Bindable var state = appState
         NavigationSplitView {
+            TagSidebarView()
+                .navigationSplitViewColumnWidth(min: 170, ideal: 200)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    sidebarFooter
+                }
+        } content: {
             // Selection highlight is high-frequency: List stays un-animated.
             List(state.filteredSkills, selection: $state.selectedSkillName) { skill in
                 SkillRowView(skill: skill)
@@ -43,21 +49,24 @@ struct DashboardView: View {
             } message: {
                 Text("Unlinks it from every tool and deletes it from the store. Git history keeps a copy.")
             }
-            .searchable(text: $state.searchText, placement: .sidebar, prompt: "Search \(state.skills.count) skills")
+            .searchable(text: $state.searchText, prompt: searchPrompt)
             .navigationSplitViewColumnWidth(min: 300, ideal: 360)
-            .navigationTitle("Skills")
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                sidebarFooter
-            }
+            .navigationTitle(contentTitle)
             .overlay {
                 if state.skills.isEmpty {
                     ContentUnavailableView(
                         "No skills found",
-                        systemImage: "wand.and.stars",
+                        systemImage: "square.stack.3d.up",
                         description: Text(state.loadError ?? "Nothing in \(CatalogService.isMigrated ? "skills/" : "claude-skills/ or cursor-skills/") yet.")
                     )
-                } else if state.filteredSkills.isEmpty {
+                } else if state.filteredSkills.isEmpty && !state.searchText.isEmpty {
                     ContentUnavailableView.search(text: state.searchText)
+                } else if state.filteredSkills.isEmpty {
+                    ContentUnavailableView(
+                        "No skills here",
+                        systemImage: "number",
+                        description: Text("Nothing carries this tag yet — add it from a skill's header.")
+                    )
                 }
             }
         } detail: {
@@ -110,6 +119,22 @@ struct DashboardView: View {
 
     private var activeToolCount: Int {
         Tool.allCases.filter { FileManager.default.fileExists(atPath: $0.skillsDir.path) }.count
+    }
+
+    private var contentTitle: String {
+        switch appState.sidebarSelection {
+        case .all: return "All Skills"
+        case .updates: return "Updates"
+        case .tag(let tag): return "#\(tag)"
+        }
+    }
+
+    private var searchPrompt: String {
+        switch appState.sidebarSelection {
+        case .all: return "Search \(appState.skills.count) skills"
+        case .updates: return "Search updates"
+        case .tag(let tag): return "Search #\(tag)"
+        }
     }
 
     // MARK: - Status / drift

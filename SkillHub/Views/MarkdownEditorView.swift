@@ -14,7 +14,7 @@ struct MarkdownEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             TextEditor(text: $content)
-                .font(.system(.body, design: .monospaced))
+                .font(.system(size: 14, design: .monospaced))
                 .scrollContentBackground(.hidden)
                 .padding(4)
 

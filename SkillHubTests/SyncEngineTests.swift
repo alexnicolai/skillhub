@@ -246,3 +246,13 @@ extension SyncEngineTests {
         XCTAssertTrue(surviving.contains("precious local edits"))
     }
 }
+
+extension SyncEngineTests {
+    func testBuildManifestPreservesTags() throws {
+        try makeSkill(repo.appendingPathComponent("skills"), "tagged")
+        var manifest = try engine.buildManifest()
+        manifest.skills["tagged"]?.tags = ["UI/UX"]
+        let rebuilt = try engine.buildManifest(existing: manifest)
+        XCTAssertEqual(rebuilt.skills["tagged"]?.tags, ["UI/UX"])
+    }
+}

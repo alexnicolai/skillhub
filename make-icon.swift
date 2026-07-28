@@ -1,12 +1,19 @@
 #!/usr/bin/swift
-// Renders AppIcon.icns for SkillHub: indigo→violet gradient rounded-rect
-// (macOS HIG: ~824pt content on 1024 canvas with baked corner radius),
-// white wand.and.stars SF Symbol centered.
+// Renders AppIcon iconset from AppIcon-source.png (1024×1024).
+// The source has opaque corners; we clip to the macOS-style rounded rect the
+// artwork already draws, making everything outside it transparent.
 import AppKit
 
+let sourceURL = URL(fileURLWithPath: "AppIcon-source.png")
+guard let source = NSImage(contentsOf: sourceURL) else {
+    fatalError("AppIcon-source.png missing")
+}
+
 let canvas: CGFloat = 1024
-let content: CGFloat = 824             // HIG margin for macOS icons
-let corner: CGFloat = content * 0.225  // macOS squircle-ish radius
+// Clip just inside the artwork's own drawn squircle so its anti-aliased white
+// edge doesn't leave a halo.
+let clipInset: CGFloat = 30
+let clipRadius: CGFloat = 185
 
 func drawIcon(size: CGFloat) -> NSImage {
     let scale = size / canvas
@@ -14,54 +21,17 @@ func drawIcon(size: CGFloat) -> NSImage {
     image.lockFocus()
     defer { image.unlockFocus() }
 
-    let inset = (canvas - content) / 2 * scale
-    let rect = NSRect(x: inset, y: inset, width: content * scale, height: content * scale)
-    let path = NSBezierPath(roundedRect: rect, xRadius: corner * scale, yRadius: corner * scale)
-
-    // Subtle drop shadow so the icon sits on light docks.
-    if let ctx = NSGraphicsContext.current?.cgContext {
-        ctx.saveGState()
-        ctx.setShadow(offset: CGSize(width: 0, height: -6 * scale),
-                      blur: 24 * scale,
-                      color: NSColor.black.withAlphaComponent(0.3).cgColor)
-        NSColor.black.withAlphaComponent(0.001).setFill()
-        path.fill()
-        ctx.restoreGState()
-    }
-
-    let gradient = NSGradient(colors: [
-        NSColor(calibratedRed: 0.42, green: 0.36, blue: 0.95, alpha: 1),  // indigo
-        NSColor(calibratedRed: 0.62, green: 0.32, blue: 0.92, alpha: 1),  // violet
-    ])!
-    gradient.draw(in: path, angle: -60)
-
-    // Faint inner highlight along the top edge for depth.
-    path.addClip()
-    let highlight = NSGradient(colors: [
-        NSColor.white.withAlphaComponent(0.28),
-        NSColor.white.withAlphaComponent(0.0),
-    ])!
-    highlight.draw(in: NSRect(x: rect.minX, y: rect.midY, width: rect.width, height: rect.height / 2), angle: -90)
-
-    // Symbol
-    let config = NSImage.SymbolConfiguration(pointSize: 380 * scale, weight: .medium)
-    if let symbol = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: nil)?
-        .withSymbolConfiguration(config) {
-        let tinted = NSImage(size: symbol.size)
-        tinted.lockFocus()
-        symbol.draw(at: .zero, from: .zero, operation: .sourceOver, fraction: 1)
-        NSColor.white.set()
-        NSRect(origin: .zero, size: symbol.size).fill(using: .sourceAtop)
-        tinted.unlockFocus()
-
-        let symbolRect = NSRect(
-            x: (size - tinted.size.width) / 2,
-            y: (size - tinted.size.height) / 2,
-            width: tinted.size.width,
-            height: tinted.size.height
-        )
-        tinted.draw(in: symbolRect, from: .zero, operation: .sourceOver, fraction: 1)
-    }
+    let clipRect = NSRect(
+        x: clipInset * scale, y: clipInset * scale,
+        width: (canvas - clipInset * 2) * scale,
+        height: (canvas - clipInset * 2) * scale
+    )
+    NSBezierPath(roundedRect: clipRect, xRadius: clipRadius * scale, yRadius: clipRadius * scale)
+        .addClip()
+    source.draw(
+        in: NSRect(x: 0, y: 0, width: size, height: size),
+        from: .zero, operation: .sourceOver, fraction: 1
+    )
     return image
 }
 
@@ -82,4 +52,4 @@ for base in [16, 32, 128, 256, 512] {
     writePNG(drawIcon(size: CGFloat(base)), to: iconset.appendingPathComponent("icon_\(base)x\(base).png"))
     writePNG(drawIcon(size: CGFloat(base * 2)), to: iconset.appendingPathComponent("icon_\(base)x\(base)@2x.png"))
 }
-print("iconset written — run iconutil to produce .icns")
+print("iconset written")

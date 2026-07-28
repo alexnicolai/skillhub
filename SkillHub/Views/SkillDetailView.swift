@@ -143,8 +143,8 @@ struct SkillDetailView: View {
                     .buttonStyle(PressableButtonStyle())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(.blue.opacity(0.14), in: Capsule())
-                    .foregroundStyle(.blue)
+                    .background(Color.brand.opacity(0.14), in: Capsule())
+                    .foregroundStyle(Color.brand)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
                     .help("A newer version exists in \(skill.provenance.source ?? "the upstream repo") — click to update")
                 }
@@ -158,9 +158,11 @@ struct SkillDetailView: View {
             }
 
             Text(skill.summary)
-                .font(.callout)
+                .font(AppText.body)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+
+            TagEditorView(skill: skill)
 
             if let updateError {
                 Label(updateError, systemImage: "exclamationmark.triangle.fill")
@@ -235,26 +237,48 @@ struct SkillDetailView: View {
 
     private var filesTab: some View {
         List(CatalogService.fileList(for: skill), id: \.self) { rel in
+            FileRow(rel: rel, icon: iconForFile(rel), folderURL: skill.folderURL)
+        }
+        .scrollContentBackground(.hidden)
+    }
+
+    /// One file row: hover highlights the row and reveals its action.
+    private struct FileRow: View {
+        let rel: String
+        let icon: String
+        let folderURL: URL
+        @State private var hovering = false
+
+        var body: some View {
             HStack(spacing: 8) {
-                Image(systemName: iconForFile(rel))
+                Image(systemName: icon)
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
                 Text(rel)
-                    .font(.system(.callout, design: .monospaced))
+                    .font(AppText.mono)
                 Spacer()
                 Button {
                     NSWorkspace.shared.activateFileViewerSelecting(
-                        [skill.folderURL.appendingPathComponent(rel)])
+                        [folderURL.appendingPathComponent(rel)])
                 } label: {
                     Label("Reveal in Finder", systemImage: "folder")
-                        .font(.caption)
+                        .font(AppText.secondary)
                 }
                 .buttonStyle(.borderless)
+                .opacity(hovering ? 1 : 0)
                 .help("Show \(rel) in a Finder window")
             }
-            .padding(.vertical, 1)
+            .padding(.vertical, 2)
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .background(
+                Color.primary.opacity(hovering ? 0.06 : 0),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .onHover { h in
+                withAnimation(.easeOut(duration: 0.12)) { hovering = h }
+            }
         }
-        .scrollContentBackground(.hidden)
     }
 
     private func iconForFile(_ path: String) -> String {

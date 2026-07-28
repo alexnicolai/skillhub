@@ -28,10 +28,22 @@ struct ManifestSkill: Codable {
     /// Intent: which tools should have this skill. Live symlink state is derived;
     /// a mismatch between the two is drift.
     var tools: [String: Bool]
+    /// User-defined tags for grouping (e.g. "UI/UX"). Stored sorted, no "#".
+    var tags: [String]?
     var addedAt: Date
 
     func isEnabled(for tool: Tool) -> Bool {
         tools[tool.rawValue] ?? false
+    }
+}
+
+enum Tags {
+    /// Normalize user input: trim, strip leading '#'. Nil when empty.
+    static func normalize(_ raw: String) -> String? {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while t.hasPrefix("#") { t.removeFirst() }
+        t = t.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : t
     }
 }
 

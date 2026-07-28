@@ -166,6 +166,7 @@ final class HTTPServer: @unchecked Sendable {
                 "usageCount": usage[name]?.count ?? 0,
             ]
             if let short = entry.shortDescription { out["shortDescription"] = short }
+            if let tags = entry.tags, !tags.isEmpty { out["tags"] = tags }
             if let updated = entry.source.updatedAt {
                 out["updatedAt"] = ISO8601DateFormatter().string(from: updated)
             }

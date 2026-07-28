@@ -1,6 +1,13 @@
 import Foundation
 import Observation
 
+/// Sidebar scopes: whole library, updates only, or one tag.
+enum SidebarItem: Hashable {
+    case all
+    case updates
+    case tag(String)
+}
+
 /// Root observable state for the app.
 @Observable
 @MainActor
@@ -12,8 +19,57 @@ final class AppState {
     var loadError: String?
     var searchText: String = ""
     var selectedSkillName: String?
+    var sidebarSelection: SidebarItem = .all
     var usage: [String: UsageCache.SkillHit] = [:]
     var updateAvailable: Set<String> = []
+
+    // MARK: - Tags
+
+    /// All tags across the library with usage counts, alphabetical.
+    var allTags: [(tag: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for skill in skills {
+            for tag in skill.tags { counts[tag, default: 0] += 1 }
+        }
+        return counts.sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { ($0.key, $0.value) }
+    }
+
+    func addTag(_ raw: String, to skillName: String) {
+        guard let tag = Tags.normalize(raw), manifest.skills[skillName] != nil else { return }
+        var tags = Set(manifest.skills[skillName]?.tags ?? [])
+        tags.insert(tag)
+        setTags(tags.sorted(), for: skillName)
+    }
+
+    func removeTag(_ tag: String, from skillName: String) {
+        guard let existing = manifest.skills[skillName]?.tags else { return }
+        setTags(existing.filter { $0 != tag }, for: skillName)
+    }
+
+    /// Remove a tag from every skill (sidebar context menu).
+    func deleteTagEverywhere(_ tag: String) {
+        for (name, entry) in manifest.skills where entry.tags?.contains(tag) == true {
+            manifest.skills[name]?.tags = entry.tags?.filter { $0 != tag }
+        }
+        if sidebarSelection == .tag(tag) { sidebarSelection = .all }
+        persistManifest()
+    }
+
+    private func setTags(_ tags: [String], for skillName: String) {
+        manifest.skills[skillName]?.tags = tags.isEmpty ? nil : tags
+        persistManifest()
+    }
+
+    private func persistManifest() {
+        do {
+            try withSuppressedWatcher { try ManifestIO.save(manifest) }
+            loadError = nil
+        } catch {
+            loadError = "Saving tags failed: \(error.localizedDescription)"
+        }
+        reload()
+    }
 
     /// Computed so a store-location change during onboarding takes effect.
     var engine: SyncEngine { SyncEngine() }
@@ -56,13 +112,21 @@ final class AppState {
         return try work()
     }
 
+    /// Skills within the selected sidebar scope, then narrowed by search.
     var filteredSkills: [Skill] {
-        guard !searchText.isEmpty else { return skills }
+        var scoped: [Skill]
+        switch sidebarSelection {
+        case .all: scoped = skills
+        case .updates: scoped = skills.filter(\.updateAvailable)
+        case .tag(let tag): scoped = skills.filter { $0.tags.contains(tag) }
+        }
+        guard !searchText.isEmpty else { return scoped }
         let q = searchText.lowercased()
-        return skills.filter {
+        return scoped.filter {
             $0.name.lowercased().contains(q)
                 || $0.description.lowercased().contains(q)
                 || ($0.shortDescription?.lowercased().contains(q) ?? false)
+                || $0.tags.contains { $0.lowercased().contains(q) }
         }
     }
 

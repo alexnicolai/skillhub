@@ -4,7 +4,7 @@ import Foundation
 /// make-app.sh greps this constant into Info.plist; /health reports it;
 /// AppUpdateChecker compares it against the latest GitHub release tag.
 enum AppVersion {
-    static let current = "1.2.0"
+    static let current = "1.3.0"
 
     /// True when `other` (e.g. "v1.2.0") is newer than the running version.
     static func isNewer(_ other: String) -> Bool {

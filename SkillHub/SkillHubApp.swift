@@ -34,7 +34,7 @@ struct SkillHubApp: App {
                 }
             }
             .environment(appState)
-            .tint(.indigo)
+            .tint(Color.brand)
         }
         .windowResizability(.contentSize)
         .commands {
@@ -51,6 +51,7 @@ struct SkillHubApp: App {
         Settings {
             SettingsView()
                 .environment(appState)
+                .tint(Color.brand)
         }
     }
 }

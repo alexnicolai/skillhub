@@ -15,6 +15,8 @@ struct Skill: Identifiable, Equatable {
     var updateAvailable: Bool
     var usageCount: Int
     var lastUsed: Date?
+    /// User-defined grouping tags (no "#", sorted).
+    var tags: [String] = []
 
     var id: String { name }
 
@@ -30,5 +32,6 @@ struct Skill: Identifiable, Equatable {
         lhs.name == rhs.name && lhs.contentHash == rhs.contentHash
             && lhs.intendedTools == rhs.intendedTools && lhs.liveTools == rhs.liveTools
             && lhs.updateAvailable == rhs.updateAvailable && lhs.usageCount == rhs.usageCount
+            && lhs.tags == rhs.tags
     }
 }

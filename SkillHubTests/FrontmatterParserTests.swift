@@ -127,3 +127,28 @@ final class FrontmatterParserTests: XCTestCase {
         XCTAssertEqual(data, try encoder.encode(manifest))
     }
 }
+
+extension FrontmatterParserTests {
+    func testTagsNormalizeAndRoundTrip() throws {
+        XCTAssertEqual(Tags.normalize("  #UI/UX "), "UI/UX")
+        XCTAssertEqual(Tags.normalize("##nested"), "nested")
+        XCTAssertEqual(Tags.normalize("plain"), "plain")
+        XCTAssertNil(Tags.normalize("  # "))
+        XCTAssertNil(Tags.normalize(""))
+
+        var manifest = Manifest.empty()
+        manifest.skills["t"] = ManifestSkill(
+            description: "d", shortDescription: nil, contentHash: "sha256:x",
+            source: .local, tools: [:], tags: ["UI/UX", "animation"],
+            addedAt: Date(timeIntervalSince1970: 0))
+        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]; enc.dateEncodingStrategy = .iso8601
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let back = try dec.decode(Manifest.self, from: enc.encode(manifest))
+        XCTAssertEqual(back.skills["t"]?.tags, ["UI/UX", "animation"])
+
+        // Old manifests without tags still decode.
+        let legacy = #"{"version":1,"skills":{"o":{"description":"d","contentHash":"c","source":{"sourceType":"local"},"tools":{},"addedAt":"2026-01-01T00:00:00Z"}}}"#
+        let old = try dec.decode(Manifest.self, from: Data(legacy.utf8))
+        XCTAssertNil(old.skills["o"]?.tags)
+    }
+}
