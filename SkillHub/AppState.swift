@@ -40,6 +40,21 @@ final class AppState {
         }
     }
 
+    // MARK: - App self-update
+
+    var appUpdate: AppUpdateChecker.Release?
+    var appUpdateDismissed = false
+
+    func checkForAppUpdate(force: Bool = false) {
+        Task.detached(priority: .utility) {
+            guard let release = await AppUpdateChecker().check(force: force) else { return }
+            await MainActor.run {
+                self.appUpdate = release
+                self.appUpdateDismissed = false
+            }
+        }
+    }
+
     /// Start watching the store + tool dirs; safe to call once after launch.
     func startWatching() {
         guard watcher == nil else { return }

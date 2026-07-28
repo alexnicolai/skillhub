@@ -3,6 +3,7 @@
 # Usage: ./make-app.sh [--install]   (--install copies to /Applications)
 set -euo pipefail
 cd "$(dirname "$0")"
+VERSION=$(grep 'static let current' SkillHub/AppVersion.swift | sed -E 's/.*"([^"]+)".*/\1/')
 
 echo "→ Building release…"
 swift build -c release
@@ -28,7 +29,7 @@ if [[ ! -f dist/AppIcon.icns ]]; then
 fi
 cp dist/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -39,7 +40,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIconFile</key>            <string>AppIcon</string>
     <key>CFBundleDisplayName</key>         <string>SkillHub</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
-    <key>CFBundleShortVersionString</key>  <string>1.0</string>
+    <key>CFBundleShortVersionString</key>  <string>${VERSION}</string>
     <key>CFBundleVersion</key>             <string>1</string>
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
     <key>NSHighResolutionCapable</key>     <true/>

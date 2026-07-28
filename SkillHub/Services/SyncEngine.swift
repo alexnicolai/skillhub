@@ -136,7 +136,6 @@ struct SyncEngine {
     /// Step 1-3 of adopt: unify repo layout. One commit. No tool dirs touched.
     func migrateRepoLayout(git: GitService) throws {
         guard !fm.fileExists(atPath: skillsDir.path) else { return }
-        let legacyClaude = repoRoot.appendingPathComponent("claude-skills")
         let legacyCursor = repoRoot.appendingPathComponent("cursor-skills")
 
         try git.run(["mv", "claude-skills", "skills"])

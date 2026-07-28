@@ -16,6 +16,7 @@ struct SkillHubApp: App {
                             appState.startUsageScanning()
                             appState.startServer()
                             appState.checkForUpdates()
+                            appState.checkForAppUpdate()
                         }
                 } else {
                     OnboardingView()

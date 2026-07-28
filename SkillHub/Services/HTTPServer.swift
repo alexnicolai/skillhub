@@ -117,7 +117,7 @@ final class HTTPServer: @unchecked Sendable {
             let manifest = providers.manifest()
             return httpResponse(200, json: [
                 "status": "ok",
-                "version": "1.0",
+                "version": AppVersion.current,
                 "skillCount": manifest.skills.count,
             ])
 
