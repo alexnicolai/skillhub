@@ -35,9 +35,7 @@ curl -s http://127.0.0.1:4477/skills
 
 **[Download SkillHub.dmg](https://github.com/alexnicolai/skillhub/releases/latest)** → open it → drag SkillHub to Applications.
 
-> First launch: **right-click → Open → Open** (once, until releases are notarized). Or: `xattr -dr com.apple.quarantine /Applications/SkillHub.app`
-
-From then on **SkillHub updates itself**: when a new version ships you get an in-app prompt — click *Install and Relaunch* and you're done. Updates are EdDSA-signed (Sparkle) and served from GitHub releases.
+Releases are **signed and notarized** (Developer ID), and **SkillHub updates itself**: when a new version ships you get an in-app prompt — click *Install and Relaunch* and you're done. Updates are EdDSA-signed (Sparkle) and served from GitHub releases.
 
 Onboarding walks you through picking (or creating/cloning) your skill store and connecting your tools. Nothing is touched without a timestamped backup.
 
