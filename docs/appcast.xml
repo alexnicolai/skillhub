@@ -3,14 +3,14 @@
   <channel>
     <title>SkillHub</title>
     <item>
-      <title>SkillHub 1.1.1</title>
-      <link>https://github.com/alexnicolai/skillhub/releases/tag/v1.1.1</link>
-      <sparkle:version>1.1.1</sparkle:version>
-      <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+      <title>SkillHub 1.2.0</title>
+      <link>https://github.com/alexnicolai/skillhub/releases/tag/v1.2.0</link>
+      <sparkle:version>1.2.0</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>https://github.com/alexnicolai/skillhub/releases/tag/v1.1.1</sparkle:releaseNotesLink>
-      <pubDate>Tue, 28 Jul 2026 16:15:59 -0400</pubDate>
-      <enclosure url="https://github.com/alexnicolai/skillhub/releases/download/v1.1.1/SkillHub-1.1.1.zip" sparkle:edSignature="NbFwobCaJRZ1qT+bMFH983G1B2ojaXk+Y75G3Yaz0KA5U3jLi7lu2pKFm1M8qmSrRbPsu+kNJa2KUOtIJEOeCQ==" length="3493494" type="application/octet-stream" />
+      <sparkle:releaseNotesLink>https://github.com/alexnicolai/skillhub/releases/tag/v1.2.0</sparkle:releaseNotesLink>
+      <pubDate>Tue, 28 Jul 2026 16:38:02 -0400</pubDate>
+      <enclosure url="https://github.com/alexnicolai/skillhub/releases/download/v1.2.0/SkillHub-1.2.0.zip" sparkle:edSignature="4k2dVuZWHrbzKuJgCWSCtYIQBYWBmcdevDND5gCiPSXVb05wObAG1Lc08lL6Z9Mf6VwwMgK3sW92EJ4hrM5wDQ==" length="3516341" type="application/octet-stream" />
     </item>
   </channel>
 </rss>
