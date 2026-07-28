@@ -40,6 +40,45 @@ enum Motion {
     }
 }
 
+/// Minimal text-tab switcher: no boxes, active tab gets weight + a sliding
+/// underline (matchedGeometryEffect). Cleaner than a segmented control for
+/// document-style views.
+struct UnderlineTabs<T: Hashable>: View {
+    let tabs: [(T, String)]
+    @Binding var selection: T
+    @Namespace private var ns
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 22) {
+            ForEach(tabs, id: \.0) { (value, title) in
+                let selected = value == selection
+                Button {
+                    withAnimation(reduceMotion ? nil : Motion.content) { selection = value }
+                } label: {
+                    VStack(spacing: 7) {
+                        Text(title)
+                            .font(.callout)
+                            .fontWeight(selected ? .semibold : .regular)
+                            .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                        ZStack {
+                            Color.clear.frame(height: 2)
+                            if selected {
+                                Capsule()
+                                    .fill(.tint)
+                                    .frame(height: 2)
+                                    .matchedGeometryEffect(id: "underline", in: ns)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 /// Press feedback: scale 0.97, ~150ms ease-out. Felt, not seen.
 struct PressableButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

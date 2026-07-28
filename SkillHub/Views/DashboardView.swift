@@ -5,6 +5,7 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showGitPanel = false
     @State private var showDriftPopover = false
+    @State private var skillPendingRemoval: String?
 
     var body: some View {
         @Bindable var state = appState
@@ -13,6 +14,34 @@ struct DashboardView: View {
             List(state.filteredSkills, selection: $state.selectedSkillName) { skill in
                 SkillRowView(skill: skill)
                     .tag(skill.name)
+                    .contextMenu {
+                        Button {
+                            NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
+                        } label: {
+                            Label("Reveal in Finder", systemImage: "folder")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            skillPendingRemoval = skill.name
+                        } label: {
+                            Label("Remove from Hub…", systemImage: "trash")
+                        }
+                    }
+            }
+            .confirmationDialog(
+                "Remove \(skillPendingRemoval ?? "") from the hub?",
+                isPresented: Binding(
+                    get: { skillPendingRemoval != nil },
+                    set: { if !$0 { skillPendingRemoval = nil } }
+                )
+            ) {
+                Button("Remove from Hub and All Tools", role: .destructive) {
+                    if let name = skillPendingRemoval { appState.deleteSkill(name) }
+                    skillPendingRemoval = nil
+                }
+                Button("Cancel", role: .cancel) { skillPendingRemoval = nil }
+            } message: {
+                Text("Unlinks it from every tool and deletes it from the store. Git history keeps a copy.")
             }
             .searchable(text: $state.searchText, placement: .sidebar, prompt: "Search \(state.skills.count) skills")
             .navigationSplitViewColumnWidth(min: 300, ideal: 360)

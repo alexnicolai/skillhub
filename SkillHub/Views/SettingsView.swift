@@ -11,7 +11,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Skill store") {
+            Section {
                 LabeledContent("Location") {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([AppPaths.repoRoot])
@@ -24,28 +24,34 @@ struct SettingsView: View {
                 }
                 Button("Run Setup Again…") { onboarded = false }
                     .help("Reopens onboarding to move the store or re-connect tools")
+            } header: {
+                Text("Skill store")
+            } footer: {
+                Text("The one folder where every skill actually lives — a normal git repository. Your AI tools don't get their own copies; they all read from here. Because it's git, you can push it to GitHub and pull it on your other Macs.")
             }
 
-            Section("GitHub") {
+            Section {
                 SecureField("Personal access token (optional)", text: $githubToken)
-                Text("Raises the unauthenticated rate limit for update checks. Read-only public access is enough.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("GitHub")
+            } footer: {
+                Text("Used only to check skills' source repositories for new versions (the \"Update\" badges). Without a token, GitHub allows 60 anonymous checks per hour — plenty for most people, but a token removes the limit. Create one at github.com → Settings → Developer settings; read-only public access is enough. It never leaves this Mac.")
             }
 
-            Section("API server") {
+            Section {
                 if appState.serverPort > 0 {
                     LabeledContent("Address", value: "http://127.0.0.1:\(String(appState.serverPort))")
                 } else {
                     Text(appState.serverError ?? "Server not running")
                         .foregroundStyle(.red)
                 }
+            } header: {
+                Text("API server")
+            } footer: {
+                Text("A tiny web server, visible only to this Mac, that lets your AI assistants ask SkillHub what skills you have. The \"skillhub\" skill installed in each tool teaches models to query it — so they always see your current catalog instead of a stale list.")
             }
 
-            Section("Per-tool link mode") {
-                Text("Symlink is the default. Switch a tool to Copy only if it fails to read skills through symlinks (SkillHub then hash-syncs real copies).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section {
                 ForEach(Tool.allCases) { tool in
                     Picker(tool.displayName, selection: linkModeBinding(for: tool)) {
                         Text("Symlink").tag(LinkMode.symlink)
@@ -53,6 +59,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+            } header: {
+                Text("Per-tool link mode")
+            } footer: {
+                Text("A symlink is a shortcut: the tool's skill folder just points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate instead, which SkillHub re-syncs by comparing checksums. Keep Symlink unless a tool proves unable to read skills through them.")
             }
 
             Section {

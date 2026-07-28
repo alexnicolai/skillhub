@@ -429,6 +429,42 @@ struct SyncEngine {
         }
     }
 
+    // MARK: - Removal
+
+    struct RemovalReport {
+        var removedFrom: [Tool] = []
+        /// Tools whose entry was a divergent real copy — left in place, never deleted.
+        var divergentLeft: [Tool] = []
+    }
+
+    /// Remove a skill from the hub: unlink it from every tool, then delete the
+    /// canonical folder. Divergent tool-local copies are preserved (they hold
+    /// data the store doesn't); git history keeps the canonical content.
+    @discardableResult
+    func removeSkill(_ name: String) throws -> RemovalReport {
+        let canonical = canonicalFolder(name)
+        guard fm.fileExists(atPath: canonical.path) else {
+            throw NSError(domain: "SkillHub", code: 8,
+                          userInfo: [NSLocalizedDescriptionKey: "No skill named \(name) in the store"])
+        }
+        var report = RemovalReport()
+        for tool in toolDirs.keys.sorted() {
+            let entry = toolDirs[tool]!.appendingPathComponent(name)
+            guard let attrs = try? fm.attributesOfItem(atPath: entry.path) else { continue }
+            if attrs[.type] as? FileAttributeType == .typeSymbolicLink {
+                try fm.removeItem(at: entry)
+                report.removedFrom.append(tool)
+            } else if HashService.foldersIdentical(entry, canonical) {
+                try fm.removeItem(at: entry)
+                report.removedFrom.append(tool)
+            } else {
+                report.divergentLeft.append(tool)
+            }
+        }
+        try fm.removeItem(at: canonical)
+        return report
+    }
+
     // MARK: - Helpers
 
     func canonicalFolder(_ name: String) -> URL {

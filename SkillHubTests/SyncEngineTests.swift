@@ -210,3 +210,39 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertThrowsError(try engine.enable(skill: "nope", for: .cursor))
     }
 }
+
+extension SyncEngineTests {
+    func testRemoveSkill() throws {
+        let fm = FileManager.default
+        try makeSkill(repo.appendingPathComponent("skills"), "doomed")
+        try git.commitAll(message: "skills")
+        try engine.enable(skill: "doomed", for: .claude)
+        try engine.enable(skill: "doomed", for: .cursor)
+
+        let report = try engine.removeSkill("doomed")
+        XCTAssertEqual(Set(report.removedFrom), [.claude, .cursor])
+        XCTAssertTrue(report.divergentLeft.isEmpty)
+        XCTAssertFalse(fm.fileExists(atPath: repo.appendingPathComponent("skills/doomed").path))
+        XCTAssertFalse(fm.fileExists(atPath: claudeDir.appendingPathComponent("doomed").path))
+        XCTAssertFalse(fm.fileExists(atPath: cursorDir.appendingPathComponent("doomed").path))
+
+        // Removing again fails cleanly.
+        XCTAssertThrowsError(try engine.removeSkill("doomed"))
+    }
+
+    func testRemoveSkillPreservesDivergentCopies() throws {
+        let fm = FileManager.default
+        try makeSkill(repo.appendingPathComponent("skills"), "kept")
+        try engine.enable(skill: "kept", for: .claude)
+        // cursor has a real, locally-edited copy — must survive removal.
+        try makeSkill(cursorDir, "kept", body: "precious local edits")
+
+        let report = try engine.removeSkill("kept")
+        XCTAssertEqual(report.removedFrom, [.claude])
+        XCTAssertEqual(report.divergentLeft, [.cursor])
+        XCTAssertFalse(fm.fileExists(atPath: repo.appendingPathComponent("skills/kept").path))
+        let surviving = try String(
+            contentsOf: cursorDir.appendingPathComponent("kept/SKILL.md"), encoding: .utf8)
+        XCTAssertTrue(surviving.contains("precious local edits"))
+    }
+}

@@ -144,6 +144,33 @@ final class AppState {
         reload()
     }
 
+    // MARK: - Skill removal
+
+    /// Remove a skill from the hub and from every tool using it.
+    /// Divergent tool-local copies survive; the canonical version stays in git history.
+    func deleteSkill(_ name: String) {
+        do {
+            try withSuppressedWatcher {
+                let report = try engine.removeSkill(name)
+                manifest.skills[name] = nil
+                try ManifestIO.save(manifest)
+                try? GitService().commit(
+                    paths: ["skills/\(name)", "skillhub.json"],
+                    message: "SkillHub: remove \(name)")
+                if !report.divergentLeft.isEmpty {
+                    loadError = "\(name) removed. Kept locally-modified copies in: "
+                        + report.divergentLeft.map(\.displayName).joined(separator: ", ")
+                } else {
+                    loadError = nil
+                }
+            }
+            if selectedSkillName == name { selectedSkillName = nil }
+        } catch {
+            loadError = "Remove failed: \(error.localizedDescription)"
+        }
+        reload()
+    }
+
     // MARK: - Updates
 
     /// skill name -> latest upstream tree sha, filled by checkForUpdates.

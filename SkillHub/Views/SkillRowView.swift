@@ -11,10 +11,8 @@ struct SkillRowView: View {
                     .font(.system(.body, weight: .semibold))
                     .lineLimit(1)
                 if skill.updateAvailable {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                        .help("Update available")
+                    Badge(text: "Update", systemImage: "arrow.down.circle.fill", color: .blue)
+                        .help("A newer version is available upstream — open the skill to update")
                         .transition(Motion.popIn(reduceMotion: reduceMotion))
                 }
                 Spacer(minLength: 4)

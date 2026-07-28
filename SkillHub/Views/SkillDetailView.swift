@@ -7,16 +7,17 @@ struct SkillDetailView: View {
     let skill: Skill
     @State private var updateError: String?
     @State private var confirmOverwrite = false
+    @State private var confirmDelete = false
 
     enum Tab: Int, CaseIterable {
-        case preview, edit, files, provenance
+        case preview, edit, files, info
 
         var title: String {
             switch self {
             case .preview: return "Preview"
             case .edit: return "Edit"
             case .files: return "Files"
-            case .provenance: return "Provenance"
+            case .info: return "Info"
             }
         }
     }
@@ -33,15 +34,14 @@ struct SkillDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
 
-            Picker("", selection: tabBinding) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.title) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 420)
-            .padding(.vertical, 10)
+            UnderlineTabs(
+                tabs: Tab.allCases.map { ($0, $0.title) },
+                selection: tabBinding
+            )
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .bottom) { Divider() }
 
             // Crossfade + subtle directional shift between structurally-similar
             // panes; exits are plain fades (shorter/simpler than entries).
@@ -50,7 +50,7 @@ struct SkillDetailView: View {
                 case .preview: previewTab
                 case .edit: MarkdownEditorView(fileURL: skillMdURL, content: $skillMdContent)
                 case .files: filesTab
-                case .provenance: provenanceTab
+                case .info: infoTab
                 }
             }
             .id(tab)
@@ -59,6 +59,16 @@ struct SkillDetailView: View {
             .clipped()
         }
         .navigationTitle(skill.name)
+        .toolbar {
+            ToolbarItem(placement: .destructiveAction) {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Label("Remove Skill", systemImage: "trash")
+                }
+                .help("Remove \(skill.name) from the hub and from every tool using it")
+            }
+        }
         .onAppear { loadContent() }
         .onChange(of: skill.name) {
             loadContent()
@@ -75,6 +85,17 @@ struct SkillDetailView: View {
             Button("Keep local version", role: .cancel) { updateError = nil }
         } message: {
             Text("This skill was modified locally after install. Updating replaces those edits (git history keeps them).")
+        }
+        .confirmationDialog(
+            "Remove \(skill.name) from the hub?",
+            isPresented: $confirmDelete
+        ) {
+            Button("Remove from Hub and All Tools", role: .destructive) {
+                appState.deleteSkill(skill.name)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Unlinks it from every tool and deletes it from the store. Git history keeps a copy; locally-modified tool copies are never deleted.")
         }
     }
 
@@ -116,7 +137,7 @@ struct SkillDetailView: View {
                     Button {
                         applyUpdate(override: false)
                     } label: {
-                        Label("Update", systemImage: "arrow.down.circle.fill")
+                        Label("Update Skill File", systemImage: "arrow.down.circle.fill")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(PressableButtonStyle())
@@ -125,7 +146,7 @@ struct SkillDetailView: View {
                     .background(.blue.opacity(0.14), in: Capsule())
                     .foregroundStyle(.blue)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
-                    .help("Update from \(skill.provenance.source ?? "upstream")")
+                    .help("A newer version exists in \(skill.provenance.source ?? "the upstream repo") — click to update")
                 }
                 Spacer()
                 if skill.usageCount > 0 {
@@ -166,8 +187,10 @@ struct SkillDetailView: View {
                 frontmatterCard
                 // Frontmatter is stripped: raw YAML reads as a giant setext
                 // heading in Markdown. The header + card above cover it.
+                // .docC theme inherits the window background — .gitHub paints
+                // its own, which showed as a mismatched box in dark mode.
                 Markdown(FrontmatterParser.body(of: skillMdContent))
-                    .markdownTheme(.gitHub)
+                    .markdownTheme(.docC)
                     .textSelection(.enabled)
             }
             .padding(16)
@@ -223,11 +246,11 @@ struct SkillDetailView: View {
                     NSWorkspace.shared.activateFileViewerSelecting(
                         [skill.folderURL.appendingPathComponent(rel)])
                 } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.caption2)
+                    Label("Reveal in Finder", systemImage: "folder")
+                        .font(.caption)
                 }
                 .buttonStyle(.borderless)
-                .help("Reveal in Finder")
+                .help("Show \(rel) in a Finder window")
             }
             .padding(.vertical, 1)
         }
@@ -241,9 +264,9 @@ struct SkillDetailView: View {
         return "doc"
     }
 
-    private var provenanceTab: some View {
+    private var infoTab: some View {
         Form {
-            Section("Source") {
+            Section("Where this skill came from") {
                 LabeledContent("Type", value: skill.provenance.sourceType.rawValue)
                 if let repo = skill.provenance.source {
                     LabeledContent("Repository", value: repo)
@@ -255,7 +278,7 @@ struct SkillDetailView: View {
                     LabeledContent("Upstream path", value: path)
                 }
             }
-            Section("State") {
+            Section("Versions & dates") {
                 if let hash = skill.provenance.upstreamHash {
                     LabeledContent("Upstream hash", value: String(hash.prefix(12)))
                 }
@@ -272,7 +295,7 @@ struct SkillDetailView: View {
                     LabeledContent("Last used", value: last.formatted(date: .abbreviated, time: .shortened))
                 }
             }
-            Section("Location") {
+            Section("On disk") {
                 LabeledContent("Folder") {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
