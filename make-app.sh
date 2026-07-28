@@ -65,8 +65,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 # Prefer Developer ID for distribution; fall back to ad-hoc.
+# Sign by SHA-1 hash: duplicate same-name certs make name-based signing ambiguous.
 IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-  | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.+)".*/\1/' || true)
+  | grep "Developer ID Application" | head -1 | awk '{print $2}' || true)
 if [[ -n "$IDENTITY" ]]; then
   echo "→ Signing with: $IDENTITY"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" \
