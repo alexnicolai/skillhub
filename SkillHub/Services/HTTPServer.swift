@@ -17,6 +17,8 @@ final class HTTPServer: @unchecked Sendable {
         var usage: () -> [String: UsageCache.SkillHit]
         var skillsDir: () -> URL
         var recordUsage: (String, String) -> Void   // (skill, tool)
+        /// Called after an agent submission lands in the inbox (UI refresh).
+        var inboxChanged: () -> Void = {}
     }
     private let providers: Providers
 
@@ -147,6 +149,32 @@ final class HTTPServer: @unchecked Sendable {
                 return httpResponse(204, json: nil)
             }
             return httpResponse(400, json: ["error": "expected {\"skill\": ..., \"tool\": ...}"])
+
+        case ("POST", .some("skills"), 1):
+            // Agents can PROPOSE skills — they land in the review inbox, never
+            // directly in the store.
+            let body = rawRequest[headerEnd.upperBound...]
+            guard let parsed = try? JSONSerialization.jsonObject(with: Data(body)) as? [String: Any],
+                  let name = parsed["name"] as? String,
+                  let skillMd = parsed["skillMd"] as? String else {
+                return httpResponse(400, json: ["error": "expected {\"name\": ..., \"skillMd\": ..., \"tool\"?: ...}"])
+            }
+            let tool = parsed["tool"] as? String ?? "unknown"
+            switch InboxService.submit(name: name, skillMd: skillMd, tool: tool,
+                                       store: providers.skillsDir()) {
+            case nil:
+                providers.inboxChanged()
+                return httpResponse(200, json: [
+                    "status": "pending-review",
+                    "message": "Submitted. The user will review it in SkillHub's Inbox before it becomes active.",
+                ])
+            case .badName:
+                return httpResponse(400, json: ["error": "name must be lowercase-kebab (a-z, 0-9, hyphens)"])
+            case .alreadyExists:
+                return httpResponse(409, json: ["error": "a skill named \(name) already exists (store or inbox)"])
+            case .ioFailure(let message):
+                return httpResponse(500, json: ["error": message])
+            }
 
         default:
             return httpResponse(404, json: ["error": "not found"])

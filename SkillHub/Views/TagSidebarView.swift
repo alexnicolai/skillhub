@@ -18,6 +18,34 @@ struct TagSidebarView: View {
                         .badge(appState.updateAvailable.count)
                         .tag(SidebarItem.updates)
                 }
+                if appState.issueCount > 0 {
+                    Label("Issues", systemImage: "stethoscope")
+                        .badge(appState.issueCount)
+                        .tag(SidebarItem.issues)
+                        .help("Skills with health problems: bad frontmatter, broken links, oversized files")
+                }
+                if appState.unusedCount > 0 {
+                    Label("No recorded uses", systemImage: "moon.zzz")
+                        .badge(appState.unusedCount)
+                        .tag(SidebarItem.unused)
+                        .help("Never seen in Claude Code transcripts — candidates for pruning")
+                }
+            }
+
+            if !appState.conflicts.isEmpty || !appState.inbox.isEmpty {
+                Section("Review") {
+                    if !appState.conflicts.isEmpty {
+                        Label("Conflicts", systemImage: "exclamationmark.triangle")
+                            .badge(appState.conflicts.count)
+                            .tag(SidebarItem.conflicts)
+                    }
+                    if !appState.inbox.isEmpty {
+                        Label("Inbox", systemImage: "tray")
+                            .badge(appState.inbox.count)
+                            .tag(SidebarItem.inbox)
+                            .help("Skills proposed by your agents, waiting for approval")
+                    }
+                }
             }
 
             Section("Tags") {

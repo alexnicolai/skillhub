@@ -1,10 +1,14 @@
 import Foundation
 import Observation
 
-/// Sidebar scopes: whole library, updates only, or one tag.
+/// Sidebar scopes: library views, smart groups, review queues, or one tag.
 enum SidebarItem: Hashable {
     case all
     case updates
+    case issues
+    case unused
+    case conflicts
+    case inbox
     case tag(String)
 }
 
@@ -155,6 +159,9 @@ final class AppState {
         switch sidebarSelection {
         case .all: scoped = skills
         case .updates: scoped = skills.filter(\.updateAvailable)
+        case .issues: scoped = skills.filter { !$0.issues.isEmpty }
+        case .unused: scoped = skills.filter { $0.usageCount == 0 }
+        case .conflicts, .inbox: scoped = []   // these scopes show their own lists
         case .tag(let tag): scoped = skills.filter { $0.tags.contains(tag) }
         }
         guard !searchText.isEmpty else { return scoped }
@@ -189,6 +196,8 @@ final class AppState {
             updateAvailable: updateAvailable
         )
         drift = isMigrated ? engine.detectDrift(manifest: manifest) : []
+        conflicts = ConflictsService.list(store: AppPaths.skillsDir)
+        inbox = InboxService.list()
     }
 
     // MARK: - HTTP server
@@ -209,6 +218,9 @@ final class AppState {
             skillsDir: { AppPaths.skillsDir },
             recordUsage: { [weak self] skill, tool in
                 DispatchQueue.main.async { self?.recordExternalUsage(skill: skill, tool: tool) }
+            },
+            inboxChanged: { [weak self] in
+                DispatchQueue.main.async { self?.reload() }
             }
         ))
         do {
@@ -243,6 +255,153 @@ final class AppState {
         cache.counts[key] = perFile
         scanner.saveCache(cache)
         usage = cache.aggregated()
+        reload()
+    }
+
+    // MARK: - Review queues + quick open
+
+    var conflicts: [ConflictsService.Conflict] = []
+    var inbox: [InboxService.Submission] = []
+    var showQuickOpen = false
+    var issueCount: Int { skills.filter { !$0.issues.isEmpty }.count }
+    var unusedCount: Int { skills.filter { $0.usageCount == 0 }.count }
+
+    func resolveConflict(_ conflict: ConflictsService.Conflict, takeTheirs: Bool) {
+        do {
+            try withSuppressedWatcher {
+                if takeTheirs {
+                    try ConflictsService.takeTheirs(conflict, store: AppPaths.skillsDir)
+                    if var entry = manifest.skills[conflict.skillName] {
+                        entry.contentHash = (try? HashService.hashFolder(
+                            engine.canonicalFolder(conflict.skillName))) ?? entry.contentHash
+                        manifest.skills[conflict.skillName] = entry
+                        try ManifestIO.save(manifest)
+                    }
+                    try? GitService().commit(
+                        paths: ["skills"],
+                        message: "SkillHub: resolve conflict \(conflict.entryName) (take theirs)")
+                } else {
+                    try ConflictsService.keepMine(conflict)
+                    try? GitService().commit(
+                        paths: ["skills/.conflicts"],
+                        message: "SkillHub: resolve conflict \(conflict.entryName) (keep mine)")
+                }
+            }
+            loadError = nil
+        } catch {
+            loadError = "Conflict resolution failed: \(error.localizedDescription)"
+        }
+        reload()
+    }
+
+    func approveSubmission(_ submission: InboxService.Submission) {
+        do {
+            try withSuppressedWatcher {
+                try InboxService.approve(submission, store: AppPaths.skillsDir)
+                let folder = engine.canonicalFolder(submission.name)
+                let fm = FrontmatterParser.parse(fileURL: folder.appendingPathComponent("SKILL.md"))
+                manifest.skills[submission.name] = ManifestSkill(
+                    description: fm.description ?? "",
+                    shortDescription: fm.shortDescription,
+                    contentHash: (try? HashService.hashFolder(folder)) ?? "",
+                    source: Provenance(sourceType: .local, source: "agent:\(submission.tool)",
+                                       installedAt: Date()),
+                    tools: [:],
+                    addedAt: Date()
+                )
+                for tool in Tool.allCases {
+                    try? engine.enable(skill: submission.name, for: tool)
+                    manifest.skills[submission.name]?.tools[tool.rawValue] = true
+                }
+                try ManifestIO.save(manifest)
+                try? GitService().commit(
+                    paths: ["skills/\(submission.name)", "skillhub.json"],
+                    message: "SkillHub: approve agent-submitted skill \(submission.name)")
+            }
+            loadError = nil
+        } catch {
+            loadError = "Approve failed: \(error.localizedDescription)"
+        }
+        reload()
+    }
+
+    func rejectSubmission(_ submission: InboxService.Submission) {
+        InboxService.reject(submission)
+        reload()
+    }
+
+    // MARK: - Create / install / restore
+
+    func createSkill(name: String, description: String, tags: [String], tools: Set<Tool>) throws {
+        try withSuppressedWatcher {
+            let folder = try SkillScaffold.create(
+                name: name, description: description, store: AppPaths.skillsDir)
+            manifest.skills[name] = ManifestSkill(
+                description: description,
+                shortDescription: nil,
+                contentHash: (try? HashService.hashFolder(folder)) ?? "",
+                source: Provenance(sourceType: .local, installedAt: Date()),
+                tools: Dictionary(uniqueKeysWithValues: tools.map { ($0.rawValue, true) }),
+                tags: tags.isEmpty ? nil : tags.sorted(),
+                addedAt: Date()
+            )
+            for tool in tools { try? engine.enable(skill: name, for: tool) }
+            try ManifestIO.save(manifest)
+            try? GitService().commit(
+                paths: ["skills/\(name)", "skillhub.json"],
+                message: "SkillHub: create \(name)")
+        }
+        reload()
+        sidebarSelection = .all
+        selectedSkillNames = [name]
+    }
+
+    func installRemoteSkills(repo: String, skills selection: [RepoBrowser.RemoteSkill]) throws -> RepoBrowser.InstallResult {
+        let result = try withSuppressedWatcher {
+            let result = try RepoBrowser().install(
+                repo: repo, skills: selection, into: AppPaths.skillsDir)
+            for skill in selection where result.installed.contains(skill.name) {
+                let folder = engine.canonicalFolder(skill.name)
+                let fm = FrontmatterParser.parse(fileURL: folder.appendingPathComponent("SKILL.md"))
+                manifest.skills[skill.name] = ManifestSkill(
+                    description: fm.description ?? skill.description,
+                    shortDescription: fm.shortDescription,
+                    contentHash: (try? HashService.hashFolder(folder)) ?? "",
+                    source: RepoBrowser.provenance(repo: repo, skill: skill),
+                    tools: [:],
+                    addedAt: Date()
+                )
+                for tool in Tool.allCases {
+                    try? engine.enable(skill: skill.name, for: tool)
+                    manifest.skills[skill.name]?.tools[tool.rawValue] = true
+                }
+            }
+            if !result.installed.isEmpty {
+                try ManifestIO.save(manifest)
+                try? GitService().commit(
+                    paths: ["skills", "skillhub.json"],
+                    message: "SkillHub: install \(result.installed.count) skills from \(repo)")
+            }
+            return result
+        }
+        reload()
+        return result
+    }
+
+    func restoreSkill(_ name: String, to sha: String) {
+        do {
+            try withSuppressedWatcher {
+                try GitService().restore(path: "skills/\(name)", to: sha)
+                if var entry = manifest.skills[name] {
+                    entry.contentHash = (try? HashService.hashFolder(engine.canonicalFolder(name))) ?? entry.contentHash
+                    manifest.skills[name] = entry
+                    try ManifestIO.save(manifest)
+                }
+            }
+            loadError = nil
+        } catch {
+            loadError = "Restore failed: \(error.localizedDescription)"
+        }
         reload()
     }
 

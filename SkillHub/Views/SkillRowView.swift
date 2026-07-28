@@ -15,6 +15,12 @@ struct SkillRowView: View {
                         .help("A newer version is available upstream — open the skill to update")
                         .transition(Motion.popIn(reduceMotion: reduceMotion))
                 }
+                if !skill.issues.isEmpty {
+                    Image(systemName: skill.hasErrors ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(skill.hasErrors ? .red : .orange)
+                        .help(skill.issues.map(\.message).joined(separator: "\n"))
+                }
                 Spacer(minLength: 4)
                 if skill.usageCount > 0 {
                     Text("\(skill.usageCount)×")

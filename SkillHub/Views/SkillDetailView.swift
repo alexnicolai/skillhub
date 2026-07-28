@@ -8,6 +8,9 @@ struct SkillDetailView: View {
     @State private var updateError: String?
     @State private var confirmOverwrite = false
     @State private var confirmDelete = false
+    @State private var showDiff = false
+    @State private var upstreamDiff = ""
+    @State private var diffLoading = false
 
     enum Tab: Int, CaseIterable {
         case preview, edit, files, info
@@ -60,6 +63,9 @@ struct SkillDetailView: View {
         }
         .navigationTitle(skill.name)
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                ShareMenu(skill: skill)
+            }
             ToolbarItem(placement: .destructiveAction) {
                 Button(role: .destructive) {
                     confirmDelete = true
@@ -67,6 +73,15 @@ struct SkillDetailView: View {
                     Label("Remove Skill", systemImage: "trash")
                 }
                 .help("Remove \(skill.name) from the hub and from every tool using it")
+            }
+        }
+        .sheet(isPresented: $showDiff) {
+            DiffSheet(
+                title: "\(skill.name): local vs upstream",
+                diff: upstreamDiff,
+                confirmLabel: "Update Skill File"
+            ) {
+                applyUpdate(override: false)
             }
         }
         .onAppear { loadContent() }
@@ -114,6 +129,20 @@ struct SkillDetailView: View {
         skillMdContent = (try? String(contentsOf: skillMdURL, encoding: .utf8)) ?? ""
     }
 
+    private func loadDiff() {
+        guard let entry = appState.manifest.skills[skill.name] else { return }
+        diffLoading = true
+        let folder = skill.folderURL
+        Task.detached {
+            let diff = (try? UpdateChecker().diff(skill: entry, canonicalFolder: folder)) ?? ""
+            await MainActor.run {
+                upstreamDiff = diff
+                diffLoading = false
+                showDiff = true
+            }
+        }
+    }
+
     private func applyUpdate(override: Bool) {
         do {
             try appState.applyUpdate(skill.name, overrideLocalChanges: override)
@@ -143,19 +172,34 @@ struct SkillDetailView: View {
                     .font(.system(size: 24, weight: .bold))
                     .textSelection(.enabled)
                 if skill.updateAvailable {
-                    Button {
-                        applyUpdate(override: false)
-                    } label: {
-                        Label("Update Skill File", systemImage: "arrow.down.circle.fill")
-                            .font(AppText.secondary.weight(.semibold))
+                    HStack(spacing: 4) {
+                        Button {
+                            applyUpdate(override: false)
+                        } label: {
+                            Label("Update Skill File", systemImage: "arrow.down.circle.fill")
+                                .font(AppText.secondary.weight(.semibold))
+                        }
+                        .buttonStyle(PressableButtonStyle())
+                        .help("A newer version exists in \(skill.provenance.source ?? "the upstream repo") — click to update")
+                        Divider().frame(height: 12)
+                        Button {
+                            loadDiff()
+                        } label: {
+                            if diffLoading {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Text("View changes")
+                                    .font(AppText.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help("See what changed upstream before updating")
                     }
-                    .buttonStyle(PressableButtonStyle())
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
                     .background(Color.brand.opacity(0.14), in: Capsule())
                     .foregroundStyle(Color.brand)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
-                    .help("A newer version exists in \(skill.provenance.source ?? "the upstream repo") — click to update")
                 }
                 Spacer()
                 if skill.usageCount > 0 {
@@ -180,18 +224,18 @@ struct SkillDetailView: View {
                     .padding(.top, 10)
             }
 
-            // Metadata groups: labeled, evenly spaced, room to breathe.
-            HStack(alignment: .top, spacing: 28) {
-                VStack(alignment: .leading, spacing: 7) {
-                    groupLabel("Tags")
-                    TagEditorView(skill: skill)
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    groupLabel("Available in")
-                    ToolTogglesView(skill: skill)
-                }
+            // Metadata groups: labeled, stacked so pills never wrap mid-word.
+            VStack(alignment: .leading, spacing: 7) {
+                groupLabel("Tags")
+                TagEditorView(skill: skill)
             }
             .padding(.top, 18)
+
+            VStack(alignment: .leading, spacing: 7) {
+                groupLabel("Available in")
+                ToolTogglesView(skill: skill)
+            }
+            .padding(.top, 14)
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
@@ -310,6 +354,57 @@ struct SkillDetailView: View {
 
     private var infoTab: some View {
         Form {
+            if !skill.issues.isEmpty {
+                Section("Health") {
+                    ForEach(Array(skill.issues.enumerated()), id: \.offset) { _, issue in
+                        Label {
+                            Text(issue.message)
+                                .font(AppText.secondary)
+                        } icon: {
+                            Image(systemName: issue.severity == .error
+                                  ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(issue.severity == .error ? .red : .orange)
+                        }
+                    }
+                }
+            }
+            Section("History") {
+                let entries = GitService().history(path: "skills/\(skill.name)", limit: 8)
+                if entries.isEmpty {
+                    Text("No commits recorded yet.")
+                        .font(AppText.secondary)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(entries.enumerated()), id: \.element.sha) { index, entry in
+                        HStack(spacing: 8) {
+                            Text(String(entry.sha.prefix(7)))
+                                .font(AppText.mono)
+                                .foregroundStyle(.tertiary)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(entry.subject)
+                                    .font(AppText.secondary)
+                                    .lineLimit(1)
+                                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                                    .font(AppText.small)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            if index > 0 {
+                                Button("Restore") {
+                                    appState.restoreSkill(skill.name, to: entry.sha)
+                                    loadContent()
+                                }
+                                .controlSize(.small)
+                                .help("Bring back this version (the restore itself becomes a new commit — nothing is lost)")
+                            } else {
+                                Text("current")
+                                    .font(AppText.small)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+            }
             Section("Where this skill came from") {
                 LabeledContent("Type", value: skill.provenance.sourceType.rawValue)
                 if let repo = skill.provenance.source {

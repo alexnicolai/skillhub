@@ -120,4 +120,48 @@ struct GitService {
     func hasMergeConflicts() throws -> Bool {
         try !run(["diff", "--name-only", "--diff-filter=U"]).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    // MARK: - Per-path history
+
+    struct HistoryEntry: Identifiable, Equatable {
+        let sha: String
+        let subject: String
+        let date: Date
+        var id: String { sha }
+    }
+
+    /// Recent commits touching a path (newest first).
+    func history(path: String, limit: Int = 10) -> [HistoryEntry] {
+        guard let out = try? run(["log", "-\(limit)", "--format=%H%x09%ct%x09%s", "--", path]) else {
+            return []
+        }
+        return out.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t", maxSplits: 2)
+            guard parts.count == 3, let epoch = TimeInterval(parts[1]) else { return nil }
+            return HistoryEntry(sha: String(parts[0]), subject: String(parts[2]),
+                                date: Date(timeIntervalSince1970: epoch))
+        }
+    }
+
+    /// Restore a path to its content at a commit, then commit the restore.
+    func restore(path: String, to sha: String) throws {
+        try run(["checkout", sha, "--", path])
+        try commit(paths: [path], message: "SkillHub: restore \(path) to \(String(sha.prefix(8)))")
+    }
+
+    /// Unified diff between two paths outside the index. git exits 1 when the
+    /// trees differ, which is success for our purposes.
+    func diffNoIndex(_ a: String, _ b: String) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["diff", "--no-index", "--no-color", "--", a, b]
+        process.currentDirectoryURL = repoRoot
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = Pipe()
+        guard (try? process.run()) != nil else { return "" }
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
 }

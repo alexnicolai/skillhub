@@ -80,7 +80,8 @@ struct CatalogService {
                 updateAvailable: updateAvailable.contains(name),
                 usageCount: hit?.count ?? 0,
                 lastUsed: hit?.lastUsed,
-                tags: entry?.tags?.sorted() ?? []
+                tags: entry?.tags?.sorted() ?? [],
+                issues: SkillDoctor.check(folder: folder, expectedName: name)
             ))
         }
         return skills.sorted { $0.name < $1.name }

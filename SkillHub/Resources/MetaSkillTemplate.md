@@ -11,10 +11,21 @@ If that port doesn't respond, read the current port from `~/Library/Application 
 
 ## Queries
 
-- List all skills: `curl -s http://127.0.0.1:{{PORT}}/skills`
+- List all skills (with tags): `curl -s http://127.0.0.1:{{PORT}}/skills`
 - Get one skill (full SKILL.md + file list): `curl -s http://127.0.0.1:{{PORT}}/skills/<name>`
 - Read a skill resource file: `curl -s http://127.0.0.1:{{PORT}}/skills/<name>/files/<path>`
 - Usage stats: `curl -s http://127.0.0.1:{{PORT}}/usage`
+
+## Proposing a new skill
+
+If you develop a reusable technique worth keeping, you may propose it as a skill. It goes to the user's review inbox — it does NOT become active until they approve it. Only propose genuinely reusable, self-contained skills, and tell the user you did so.
+
+```sh
+curl -s -X POST http://127.0.0.1:{{PORT}}/skills \
+  -d '{"name": "my-skill-name", "tool": "<your-tool-name>", "skillMd": "---\nname: my-skill-name\ndescription: When to use this.\n---\n\n# Content"}'
+```
+
+`name` must be lowercase-kebab. `skillMd` is the complete SKILL.md including frontmatter.
 
 ## Fallback
 

@@ -17,8 +17,12 @@ struct Skill: Identifiable, Equatable {
     var lastUsed: Date?
     /// User-defined grouping tags (no "#", sorted).
     var tags: [String] = []
+    /// Doctor findings (empty = healthy).
+    var issues: [SkillDoctor.Issue] = []
 
     var id: String { name }
+
+    var hasErrors: Bool { issues.contains { $0.severity == .error } }
 
     /// One-line summary for list rows: prefer the short description.
     var summary: String {
@@ -32,6 +36,6 @@ struct Skill: Identifiable, Equatable {
         lhs.name == rhs.name && lhs.contentHash == rhs.contentHash
             && lhs.intendedTools == rhs.intendedTools && lhs.liveTools == rhs.liveTools
             && lhs.updateAvailable == rhs.updateAvailable && lhs.usageCount == rhs.usageCount
-            && lhs.tags == rhs.tags
+            && lhs.tags == rhs.tags && lhs.issues == rhs.issues
     }
 }

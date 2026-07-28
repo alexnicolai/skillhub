@@ -110,6 +110,25 @@ struct UpdateChecker {
 
     // MARK: - One-click update
 
+    /// Unified diff of local vs upstream, for previewing an update before
+    /// applying it. Empty string means no textual differences.
+    func diff(skill: ManifestSkill, canonicalFolder: URL) throws -> String {
+        guard let url = skill.source.sourceUrl, let skillPath = skill.source.skillPath else {
+            throw NSError(domain: "SkillHub", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "No upstream URL for this skill"])
+        }
+        let fm = FileManager.default
+        let scratch = fm.temporaryDirectory.appendingPathComponent("skillhub-diff-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: scratch) }
+        try fm.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let git = GitService(repoRoot: scratch)
+        try git.run(["clone", "--depth", "1", "--filter=blob:none", "--sparse", url, "clone"])
+        try GitService(repoRoot: scratch.appendingPathComponent("clone"))
+            .run(["sparse-checkout", "set", skillPath])
+        let upstream = scratch.appendingPathComponent("clone").appendingPathComponent(skillPath)
+        return git.diffNoIndex(canonicalFolder.path, upstream.path)
+    }
+
     /// Replace the canonical folder with the upstream version via shallow sparse
     /// clone, preserving tool-specific sidecar files (agents/) the upstream lacks.
     /// Caller is responsible for the locally-modified guard and the git commit.
