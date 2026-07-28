@@ -5,13 +5,6 @@ struct MenuBarView: View {
 
     var body: some View {
         Label("\(appState.skills.count) skills in catalog", systemImage: "wand.and.stars")
-        if let release = appState.appUpdate {
-            Button {
-                NSWorkspace.shared.open(release.dmgURL ?? release.url)
-            } label: {
-                Label("SkillHub \(release.version) available — download", systemImage: "sparkles")
-            }
-        }
         if appState.serverPort > 0 {
             Label("API · 127.0.0.1:\(String(appState.serverPort))", systemImage: "antenna.radiowaves.left.and.right")
         }
@@ -35,6 +28,11 @@ struct MenuBarView: View {
             appState.checkForUpdates()
         } label: {
             Label("Refresh Catalog", systemImage: "arrow.clockwise")
+        }
+        Button {
+            AppUpdater.controller.checkForUpdates(nil)
+        } label: {
+            Label("Check for App Updates…", systemImage: "sparkles")
         }
         Divider()
         Button("Quit SkillHub") { NSApp.terminate(nil) }

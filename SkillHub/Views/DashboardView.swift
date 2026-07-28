@@ -8,49 +8,7 @@ struct DashboardView: View {
 
     var body: some View {
         @Bindable var state = appState
-        mainSplit
-            .safeAreaInset(edge: .top, spacing: 0) { appUpdateBanner }
-    }
-
-    /// "A new version of SkillHub is available" — appears at most daily,
-    /// dismissible, opens the DMG directly when the release has one.
-    @ViewBuilder
-    private var appUpdateBanner: some View {
-        if let release = appState.appUpdate, !appState.appUpdateDismissed {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.indigo)
-                Text("SkillHub \(release.version.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))) is available")
-                    .font(.callout.weight(.medium))
-                Button("Download") {
-                    NSWorkspace.shared.open(release.dmgURL ?? release.url)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                Button("Release notes") { NSWorkspace.shared.open(release.url) }
-                    .buttonStyle(.link)
-                    .font(.caption)
-                Spacer()
-                Button {
-                    appState.appUpdateDismissed = true
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption2.weight(.bold))
-                }
-                .buttonStyle(.borderless)
-                .help("Dismiss")
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(.indigo.opacity(0.1))
-            .overlay(alignment: .bottom) { Divider() }
-            .transition(Motion.popIn(reduceMotion: reduceMotion))
-        }
-    }
-
-    private var mainSplit: some View {
-        @Bindable var state = appState
-        return NavigationSplitView {
+        NavigationSplitView {
             // Selection highlight is high-frequency: List stays un-animated.
             List(state.filteredSkills, selection: $state.selectedSkillName) { skill in
                 SkillRowView(skill: skill)

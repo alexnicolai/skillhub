@@ -1,4 +1,15 @@
 import SwiftUI
+import Sparkle
+
+/// Sparkle self-update machinery. Lazily created so CLI subcommands never
+/// start an updater; only GUI scenes touch this.
+enum AppUpdater {
+    static let controller = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
+}
 
 struct SkillHubApp: App {
     @State private var appState = AppState()
@@ -16,7 +27,7 @@ struct SkillHubApp: App {
                             appState.startUsageScanning()
                             appState.startServer()
                             appState.checkForUpdates()
-                            appState.checkForAppUpdate()
+                            _ = AppUpdater.controller   // start update checks
                         }
                 } else {
                     OnboardingView()
@@ -26,6 +37,11 @@ struct SkillHubApp: App {
             .tint(.indigo)
         }
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton()
+            }
+        }
 
         MenuBarExtra("SkillHub", systemImage: "wand.and.stars") {
             MenuBarView()
@@ -36,5 +52,20 @@ struct SkillHubApp: App {
             SettingsView()
                 .environment(appState)
         }
+    }
+}
+
+/// "Check for Updates…" menu item, enabled state driven by Sparkle.
+struct CheckForUpdatesButton: View {
+    @State private var canCheck = false
+
+    var body: some View {
+        Button("Check for Updates…") {
+            AppUpdater.controller.checkForUpdates(nil)
+        }
+        .disabled(!canCheck)
+        .onReceive(
+            AppUpdater.controller.updater.publisher(for: \.canCheckForUpdates)
+        ) { canCheck = $0 }
     }
 }

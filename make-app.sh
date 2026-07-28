@@ -1,18 +1,30 @@
 #!/bin/zsh
-# Builds SkillHub.app from the Swift package (release) into app/dist/.
-# Usage: ./make-app.sh [--install]   (--install copies to /Applications)
+# Builds SkillHub.app from the Swift package (release) into dist/.
+# Usage: ./make-app.sh [--install|--dmg]
+#   --install  copies to /Applications
+#   --dmg      also builds dist/SkillHub.dmg (drag-to-Applications)
+#
+# Signing: uses a "Developer ID Application" identity when available
+# (required for notarization + friction-free Gatekeeper), else ad-hoc.
 set -euo pipefail
 cd "$(dirname "$0")"
 VERSION=$(grep 'static let current' SkillHub/AppVersion.swift | sed -E 's/.*"([^"]+)".*/\1/')
+PUBLIC_ED_KEY=$(cat sparkle_public_key.txt)
+APPCAST_URL="https://alexnicolai.github.io/skillhub/appcast.xml"
 
-echo "→ Building release…"
+echo "→ Building release (v${VERSION})…"
 swift build -c release
 
 APP=dist/SkillHub.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 
 cp .build/release/SkillHub "$APP/Contents/MacOS/SkillHub"
+
+# Embed Sparkle (linked as @rpath/…; rpath @executable_path/../Frameworks is
+# set in Package.swift linkerSettings).
+SPARKLE_FW=.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/"
 
 # SPM resource bundles (app resources + MarkdownUI). Bundle.module checks
 # Bundle.main.resourceURL, which is Contents/Resources inside an app bundle.
@@ -41,15 +53,37 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key>         <string>SkillHub</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
     <key>CFBundleShortVersionString</key>  <string>${VERSION}</string>
-    <key>CFBundleVersion</key>             <string>1</string>
+    <key>CFBundleVersion</key>             <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>      <string>14.0</string>
     <key>NSHighResolutionCapable</key>     <true/>
     <key>LSApplicationCategoryType</key>   <string>public.app-category.developer-tools</string>
+    <key>SUFeedURL</key>                   <string>${APPCAST_URL}</string>
+    <key>SUPublicEDKey</key>               <string>${PUBLIC_ED_KEY}</string>
+    <key>SUEnableAutomaticChecks</key>     <true/>
 </dict>
 </plist>
 PLIST
 
-codesign --force --sign - "$APP"
+# Prefer Developer ID for distribution; fall back to ad-hoc.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+  | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.+)".*/\1/' || true)
+if [[ -n "$IDENTITY" ]]; then
+  echo "→ Signing with: $IDENTITY"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" \
+    "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" \
+    "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" \
+    "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" \
+    "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" \
+    "$APP/Contents/Frameworks/Sparkle.framework"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+else
+  echo "→ No Developer ID identity found — ad-hoc signing (right-click → Open on first launch)."
+  codesign --force --deep --sign - "$APP"
+fi
 echo "✓ Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
