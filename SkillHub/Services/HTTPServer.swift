@@ -37,7 +37,11 @@ final class HTTPServer: @unchecked Sendable {
                 let params = NWParameters.tcp
                 params.requiredInterfaceType = .loopback
                 params.allowLocalEndpointReuse = true
-                let listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: candidate)!)
+                // Bind the socket to 127.0.0.1 explicitly — interface filtering
+                // alone leaves a wildcard bind, and provable beats filtered.
+                params.requiredLocalEndpoint = NWEndpoint.hostPort(
+                    host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: candidate)!)
+                let listener = try NWListener(using: params)
                 listener.newConnectionHandler = { [weak self] connection in
                     self?.handle(connection)
                 }
@@ -108,15 +112,15 @@ final class HTTPServer: @unchecked Sendable {
         let head = String(data: rawRequest[..<headerEnd.lowerBound], encoding: .utf8) ?? ""
 
         // DNS-rebinding guard: a hostile site whose DNS resolves to 127.0.0.1
-        // becomes same-origin with this server. Only honest local Hosts pass.
-        if let hostLine = head.components(separatedBy: "\r\n")
-            .first(where: { $0.lowercased().hasPrefix("host:") }) {
-            let host = hostLine.dropFirst(5)
-                .trimmingCharacters(in: .whitespaces)
-                .split(separator: ":").first.map(String.init)?.lowercased() ?? ""
-            guard host == "127.0.0.1" || host == "localhost" || host == "[::1]" else {
-                return httpResponse(403, json: ["error": "forbidden host"])
-            }
+        // becomes same-origin with this server. Only honest local Hosts pass;
+        // a missing Host header is rejected too (HTTP/1.1 requires one).
+        let hostLine = head.components(separatedBy: "\r\n")
+            .first { $0.lowercased().hasPrefix("host:") }
+        let host = hostLine?.dropFirst(5)
+            .trimmingCharacters(in: .whitespaces)
+            .split(separator: ":").first.map(String.init)?.lowercased()
+        guard host == "127.0.0.1" || host == "localhost" || host == "[::1]" else {
+            return httpResponse(403, json: ["error": "forbidden host"])
         }
 
         let requestLine = head.components(separatedBy: "\r\n").first ?? ""
