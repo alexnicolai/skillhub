@@ -21,7 +21,7 @@ struct MenuBarView: View {
                 window.makeKeyAndOrderFront(nil)
             }
         } label: {
-            Label("Open SkillHub", systemImage: "macwindow")
+            Label("Open \(Brand.displayName)", systemImage: "macwindow")
         }
         Button {
             appState.reload()
@@ -35,6 +35,6 @@ struct MenuBarView: View {
             Label("Check for App Updates…", systemImage: "sparkles")
         }
         Divider()
-        Button("Quit SkillHub") { NSApp.terminate(nil) }
+        Button("Quit \(Brand.displayName)") { NSApp.terminate(nil) }
     }
 }

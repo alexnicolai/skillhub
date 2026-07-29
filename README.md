@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/icon.png" width="128" alt="SkillHub icon" />
+  <img src="docs/icon.png" width="128" alt="Skill Library icon" />
 </p>
 
-<h1 align="center">SkillHub</h1>
+<h1 align="center">Skill Library</h1>
 
 <p align="center">
   The home for your AI agent skills.<br/>
@@ -11,8 +11,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="SkillHub main window" width="820" />
+  <img src="docs/screenshot.png" alt="Skill Library main window" width="820" />
 </p>
+
+> **Identifiers:** The product is **Skill Library**. The GitHub repo, CLI binary, and app bundle
+> basename remain `skillhub` / `SkillHub` so clone URLs, Sparkle updates, and scripts stay stable
+> (`com.alexnicolai.skillhub`, `/Applications/SkillHub.app`, `SkillHub status`).
 
 ---
 
@@ -20,13 +24,13 @@
 
 If you use more than one AI coding tool, your skills scatter: copies drift apart, you forget what's installed where, upstream updates pass you by, and nothing syncs between machines.
 
-## What SkillHub does
+## What Skill Library does
 
 - **One store.** All skills live in a single git repo (`~/ai-skills` by default). Every tool reads them through per-skill **symlinks** — edit once, every tool sees it instantly.
 - **Create & edit.** `⌘N` scaffolds a well-formed skill; rendered preview + raw editor; `⌘K` fuzzy-jumps to any skill.
 - **Install from GitHub.** Browse any repo's SKILL.md folders, cherry-pick, install with provenance wired for updates.
 - **Tags, not folders.** Tag skills (or drag them onto sidebar tags), filter instantly, bulk-tag and bulk-remove selections.
-- **Updates with diffs.** SkillHub compares skills against their source repos, shows what changed before you update, and guards local edits. The app updates itself via Sparkle.
+- **Updates with diffs.** Skill Library compares skills against their source repos, shows what changed before you update, and guards local edits. The app updates itself via Sparkle.
 - **Skill doctor.** Broken frontmatter, dead links, and oversized skills (context-window cost) surfaced automatically.
 - **Drift & conflicts.** Diverged tool copies get a badge, a diff, and one-click resolution — with backups, always.
 - **Usage metrics.** Counts skill invocations from Claude Code transcripts; a smart group surfaces never-used skills for pruning.
@@ -44,9 +48,9 @@ The API binds to loopback only, validates the `Host` header (DNS-rebinding prote
 
 ## Install
 
-**[Download SkillHub.dmg](https://github.com/alexnicolai/skillhub/releases/latest)** → open it → drag SkillHub to Applications.
+**[Download SkillHub.dmg](https://github.com/alexnicolai/skillhub/releases/latest)** → open it → drag **Skill Library** (`SkillHub.app`) to Applications.
 
-Releases are **signed and notarized** (Developer ID), and **SkillHub updates itself**: when a new version ships you get an in-app prompt — click *Install and Relaunch* and you're done. Updates are EdDSA-signed (Sparkle) and served from GitHub releases.
+Releases are **signed and notarized** (Developer ID), and **Skill Library updates itself**: when a new version ships you get an in-app prompt — click *Install and Relaunch* and you're done. Updates are EdDSA-signed (Sparkle) and served from GitHub releases.
 
 Onboarding walks you through picking (or creating/cloning) your skill store and connecting your tools. Nothing is touched without a timestamped backup.
 
@@ -55,14 +59,14 @@ Onboarding walks you through picking (or creating/cloning) your skill store and 
 ```sh
 git clone https://github.com/alexnicolai/skillhub.git
 cd skillhub
-./make-app.sh --install   # builds and installs /Applications/SkillHub.app
+./make-app.sh --install   # builds and installs /Applications/SkillHub.app (displays as Skill Library)
 ```
 
 Requires Xcode 15+ command line tools (macOS 14+).
 
 ## CLI
 
-The same binary is a CLI:
+The same binary is a CLI (invoke as `SkillHub`):
 
 ```sh
 SkillHub status           # per-tool link summary
@@ -91,7 +95,7 @@ your-skills-repo/
 
 - `SKILL.md` frontmatter (`name`, `description`) is the same across all tools, so one folder serves everyone. Codex's `agents/openai.yaml` sidecars ride along inside the skill folder — other tools ignore them.
 - Tool dirs the app never touches: `~/.cursor/skills-cursor` (Cursor's managed skills) and `~/.codex/skills/.system` (Codex builtins).
-- On a machine without SkillHub, the store is just plain folders in git — everything degrades gracefully.
+- On a machine without Skill Library, the store is just plain folders in git — everything degrades gracefully.
 
 ## License
 

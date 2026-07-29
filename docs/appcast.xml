@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>SkillHub</title>
+    <title>Skill Library</title>
     <item>
-      <title>SkillHub 1.3.1</title>
+      <title>Skill Library 1.3.1</title>
       <link>https://github.com/alexnicolai/skillhub/releases/tag/v1.3.1</link>
       <sparkle:version>1.3.1</sparkle:version>
       <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>

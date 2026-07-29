@@ -91,7 +91,7 @@ final class AppState {
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
                     paths: ["skills", "skillhub.json"],
-                    message: "SkillHub: remove \(names.count) skills")
+                    message: "\(Brand.commitPrefix): remove \(names.count) skills")
             }
             loadError = kept.isEmpty ? nil
                 : "Kept locally-modified copies: \(kept.joined(separator: ", "))"
@@ -279,12 +279,12 @@ final class AppState {
                     }
                     try? GitService().commit(
                         paths: ["skills"],
-                        message: "SkillHub: resolve conflict \(conflict.entryName) (take theirs)")
+                        message: "\(Brand.commitPrefix): resolve conflict \(conflict.entryName) (take theirs)")
                 } else {
                     try ConflictsService.keepMine(conflict)
                     try? GitService().commit(
                         paths: ["skills/.conflicts"],
-                        message: "SkillHub: resolve conflict \(conflict.entryName) (keep mine)")
+                        message: "\(Brand.commitPrefix): resolve conflict \(conflict.entryName) (keep mine)")
                 }
             }
             loadError = nil
@@ -316,7 +316,7 @@ final class AppState {
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
                     paths: ["skills/\(submission.name)", "skillhub.json"],
-                    message: "SkillHub: approve agent-submitted skill \(submission.name)")
+                    message: "\(Brand.commitPrefix): approve agent-submitted skill \(submission.name)")
             }
             loadError = nil
         } catch {
@@ -349,7 +349,7 @@ final class AppState {
             try ManifestIO.save(manifest)
             try? GitService().commit(
                 paths: ["skills/\(name)", "skillhub.json"],
-                message: "SkillHub: create \(name)")
+                message: "\(Brand.commitPrefix): create \(name)")
         }
         reload()
         sidebarSelection = .all
@@ -380,7 +380,7 @@ final class AppState {
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
                     paths: ["skills", "skillhub.json"],
-                    message: "SkillHub: install \(result.installed.count) skills from \(repo)")
+                    message: "\(Brand.commitPrefix): install \(result.installed.count) skills from \(repo)")
             }
             return result
         }
@@ -417,7 +417,7 @@ final class AppState {
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
                     paths: ["skills/\(name)", "skillhub.json"],
-                    message: "SkillHub: remove \(name)")
+                    message: "\(Brand.commitPrefix): remove \(name)")
                 if !report.divergentLeft.isEmpty {
                     loadError = "\(name) removed. Kept locally-modified copies in: "
                         + report.divergentLeft.map(\.displayName).joined(separator: ", ")
@@ -471,7 +471,7 @@ final class AppState {
             try ManifestIO.save(manifest)
             let git = GitService()
             try? git.commit(paths: ["skills/\(name)", "skillhub.json"],
-                            message: "SkillHub: update \(name) from upstream")
+                            message: "\(Brand.commitPrefix): update \(name) from upstream")
         }
         pendingUpdateShas[name] = nil
         updateAvailable.remove(name)

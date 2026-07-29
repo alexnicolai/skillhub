@@ -146,7 +146,7 @@ struct GitService {
     /// Restore a path to its content at a commit, then commit the restore.
     func restore(path: String, to sha: String) throws {
         try run(["checkout", sha, "--", path])
-        try commit(paths: [path], message: "SkillHub: restore \(path) to \(String(sha.prefix(8)))")
+        try commit(paths: [path], message: "\(Brand.commitPrefix): restore \(path) to \(String(sha.prefix(8)))")
     }
 
     /// Unified diff between two paths outside the index. git exits 1 when the

@@ -162,7 +162,7 @@ struct SyncEngine {
                 try? fm.removeItem(at: legacyCursor)
             }
         }
-        try git.commit(paths: ["."], message: "SkillHub: migrate to unified skills/ layout")
+        try git.commit(paths: ["."], message: "\(Brand.commitPrefix): migrate to unified skills/ layout")
     }
 
     /// Step 4-5: import ~/.agents skills + tool-dir-only skills into the store.
@@ -194,7 +194,7 @@ struct SyncEngine {
         }
         if !imported.isEmpty || !merged.isEmpty {
             try git.commit(paths: ["skills"],
-                           message: "SkillHub: import \(imported.count) external skills"
+                           message: "\(Brand.commitPrefix): import \(imported.count) external skills"
                                + (merged.isEmpty ? "" : ", merge sidecars into \(merged.count)"))
         }
         return imported

@@ -63,7 +63,7 @@ struct OnboardingView: View {
                 .font(.system(size: 44, weight: .medium))
                 .foregroundStyle(.linearGradient(
                     colors: [Color.brand, .purple], startPoint: .top, endPoint: .bottom))
-            Text("Welcome to SkillHub")
+            Text("Welcome to \(Brand.displayName)")
                 .font(.title.bold())
             Text("One source of truth for your AI agent skills.")
                 .foregroundStyle(.secondary)
@@ -98,7 +98,7 @@ struct OnboardingView: View {
             }
 
             if storeExists {
-                Label("Existing skill store detected — SkillHub will use it as-is.",
+                Label("Existing skill store detected — \(Brand.displayName) will use it as-is.",
                       systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
@@ -142,7 +142,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Connect your tools")
                 .font(.title2.bold())
-            Text("SkillHub imports every skill your tools already have into the store (originals are backed up), then links the tools to it.")
+            Text("\(Brand.displayName) imports every skill your tools already have into the store (originals are backed up), then links the tools to it.")
                 .foregroundStyle(.secondary)
 
             let detected = Tool.allCases.filter {
@@ -230,7 +230,7 @@ struct OnboardingView: View {
         case .welcome: return "Get Started"
         case .store: return storeExists ? "Use This Store" : (storeMode == .clone ? "Clone" : "Create")
         case .connect: return adoptDone ? "Continue" : "Connect Tools"
-        case .done: return "Open SkillHub"
+        case .done: return "Open \(Brand.displayName)"
         }
     }
 
@@ -352,7 +352,7 @@ struct OnboardingView: View {
                 }
                 let manifest = try engine.buildManifest(existing: (try? ManifestIO.load()) ?? .empty())
                 try ManifestIO.save(manifest)
-                try? git.commit(paths: ["."], message: "SkillHub: onboarding adopt")
+                try? git.commit(paths: ["."], message: "\(Brand.commitPrefix): onboarding adopt")
                 log("✓ Done — \(manifest.skills.count) skills in your store")
                 await MainActor.run { adoptDone = true; busy = false }
             } catch {

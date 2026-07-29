@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SkillHub — the home for your AI agent skills</title>
-<meta name="description" content="A native macOS app that creates, installs, organizes, and syncs SKILL.md skills across Claude Code, Cursor, Codex, OpenCode, Gemini CLI, and Kiro." />
-<meta property="og:title" content="SkillHub" />
+<title>Skill Library — the home for your AI agent skills</title>
+<meta name="description" content="A native macOS app that creates, installs, organizes, and syncs SKILL.md skills across Claude Code, Cursor, Codex, OpenCode, Gemini CLI, and Kiro. (GitHub: skillhub)" />
+<meta property="og:title" content="Skill Library" />
 <meta property="og:description" content="The home for your AI agent skills — create, install, organize, and sync them across every tool and machine." />
 <meta property="og:image" content="https://alexnicolai.github.io/skillhub/screenshot.png" />
 <link rel="icon" href="icon.png" />
@@ -239,7 +239,7 @@
 
 <header><div class="wrap">
   <img class="icon" src="icon.png" alt="" width="116" height="116" />
-  <h1>SkillHub</h1>
+  <h1>Skill Library</h1>
   <p class="tagline">The home for your AI agent skills. Create, install, organize, and update them once — every tool and every machine stays in sync.</p>
   <p class="tools">works with <b>Claude Code</b> · <b>Cursor</b> · <b>Codex</b> · <b>OpenCode</b> · <b>Gemini CLI</b> · <b>Kiro</b></p>
   <div class="cta-row">
@@ -247,14 +247,14 @@
     <a class="btn btn-secondary" href="https://github.com/alexnicolai/skillhub">View on GitHub</a>
   </div>
   <p class="note">Free &amp; open source (MIT) · macOS 14+ · auto-updates built in · signed &amp; notarized</p>
-  <img class="hero-shot" src="screenshot.png" alt="SkillHub: sidebar with tags and review queues, skill list, and a skill's rendered SKILL.md with per-tool toggles" />
+  <img class="hero-shot" src="screenshot.png" alt="Skill Library: sidebar with tags and review queues, skill list, and a skill's rendered SKILL.md with per-tool toggles" />
 </div></header>
 
 <section><div class="wrap">
   <div class="section-head">
     <span class="eyebrow">Features</span>
     <h2>The full lifecycle, in one app.</h2>
-    <p class="lede">Skills scatter: copies drift, updates slip by, nothing syncs. SkillHub replaces the sprawl with one store every tool reads from.</p>
+    <p class="lede">Skills scatter: copies drift, updates slip by, nothing syncs. Skill Library replaces the sprawl with one store every tool reads from.</p>
   </div>
   <div class="grid">
     <div class="card">
@@ -280,7 +280,7 @@
     <div class="card">
       <span class="glyph"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 10a6 6 0 10-2 4.5"/><path d="M16 6v4h-4"/></svg></span>
       <h3>Updates with diffs</h3>
-      <p>SkillHub watches skills' source repos and shows exactly what changed before you update. Local edits are guarded, and the app updates itself too.</p>
+      <p>Skill Library watches skills' source repos and shows exactly what changed before you update. Local edits are guarded, and the app updates itself too.</p>
     </div>
     <div class="card">
       <span class="glyph"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><line x1="10" y1="6.5" x2="10" y2="13.5"/><line x1="6.5" y1="10" x2="13.5" y2="10"/></svg></span>
@@ -325,7 +325,7 @@
 ~/.gemini/skills/&lt;name&gt;        <span class="p">→ symlink</span>
 ~/.kiro/skills/&lt;name&gt;          <span class="p">→ symlink</span></pre>
   </div>
-  <p class="term-note">Because the store is a normal git repository, edits are instant everywhere, history is free, and machines sync with a push and a pull. On a machine without SkillHub, it degrades gracefully to plain folders.</p>
+  <p class="term-note">Because the store is a normal git repository, edits are instant everywhere, history is free, and machines sync with a push and a pull. On a machine without Skill Library, it degrades gracefully to plain folders.</p>
 </div></section>
 
 <section><div class="wrap">
@@ -337,7 +337,7 @@
   <div class="term">
     <div class="term-bar">
       <span class="term-dots"><span></span><span></span><span></span></span>
-      <span class="term-title">skillhub api · 127.0.0.1:4477</span>
+      <span class="term-title">skill library api · 127.0.0.1:4477</span>
     </div>
     <pre>$ curl -s http://127.0.0.1:4477/skills
 <span class="g">{ "skills": [ { "name": "animate", "tools": ["claude","cursor","codex"], … } ] }</span>
@@ -387,7 +387,7 @@ $ SkillHub update clerk-setup
 <footer>
   <div class="wrap">
     Built by <a href="https://github.com/alexnicolai">Alex Nicolai</a> ·
-    <a href="https://github.com/alexnicolai/skillhub">Source on GitHub</a> ·
+    <a href="https://github.com/alexnicolai/skillhub">Source on GitHub</a> (repo: <code>skillhub</code>) ·
     MIT licensed — fork it and make it yours.
   </div>
 </footer>

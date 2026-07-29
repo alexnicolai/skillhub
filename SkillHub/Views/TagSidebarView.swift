@@ -62,7 +62,7 @@ struct TagSidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("SkillHub")
+        .navigationTitle(Brand.displayName)
     }
 
     /// One tag row: drop target for skills dragged from the list.

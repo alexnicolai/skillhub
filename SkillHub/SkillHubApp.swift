@@ -48,7 +48,7 @@ struct SkillHubApp: App {
             }
         }
 
-        MenuBarExtra("SkillHub", systemImage: "wand.and.stars") {
+        MenuBarExtra(Brand.displayName, systemImage: "wand.and.stars") {
             MenuBarView()
                 .environment(appState)
         }

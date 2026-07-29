@@ -9,7 +9,7 @@ enum CLI {
         switch command {
         case "help":
             print("""
-            SkillHub CLI
+            \(Brand.displayName) CLI (binary: \(Brand.technicalName))
               status            catalog + per-tool summary
               adopt --dry-run   preview migration + conversion steps
               adopt             migrate repo, import external skills, convert tools
@@ -82,7 +82,7 @@ enum CLI {
             return 0
 
         case "update":
-            guard let name = args.first else { print("usage: SkillHub update <skill-name>"); return 64 }
+            guard let name = args.first else { print("usage: \(Brand.technicalName) update <skill-name>"); return 64 }
             let manifest0 = (try? ManifestIO.load()) ?? .empty()
             guard var entry = manifest0.skills[name] else { print("unknown skill \(name)"); return 1 }
             let semaphore = DispatchSemaphore(value: 0)
@@ -103,7 +103,7 @@ enum CLI {
                 try ManifestIO.save(manifest)
                 try? GitService(repoRoot: engine.repoRoot).commit(
                     paths: ["skills/\(name)", "skillhub.json"],
-                    message: "SkillHub: update \(name) from upstream")
+                    message: "\(Brand.commitPrefix): update \(name) from upstream")
                 print("Updated \(name) to \(sha.prefix(10)).")
                 return 0
             } catch {
@@ -133,7 +133,7 @@ enum CLI {
             do {
                 try server.start()
                 _ = try? MetaSkillInstaller.install(engine: engine, port: server.port)
-                print("SkillHub API on http://127.0.0.1:\(server.port) — Ctrl-C to stop")
+                print("\(Brand.displayName) API on http://127.0.0.1:\(server.port) — Ctrl-C to stop")
                 RunLoop.main.run()
                 return 0
             } catch {
@@ -200,7 +200,7 @@ enum AdoptRunner {
             print("→ Writing manifest…")
             let manifest = try engine.buildManifest(existing: (try? ManifestIO.load()) ?? .empty())
             try ManifestIO.save(manifest)
-            try? git.commit(paths: ["skillhub.json", "skills"], message: "SkillHub: adopt — manifest + tool conversion")
+            try? git.commit(paths: ["skillhub.json", "skills"], message: "\(Brand.commitPrefix): adopt — manifest + tool conversion")
             print("Done. \(manifest.skills.count) skills in manifest. Backup: .backups/\(stamp)/")
             return 0
         } catch {

@@ -183,7 +183,7 @@ final class HTTPServer: @unchecked Sendable {
                 providers.inboxChanged()
                 return httpResponse(200, json: [
                     "status": "pending-review",
-                    "message": "Submitted. The user will review it in SkillHub's Inbox before it becomes active.",
+                    "message": "Submitted. The user will review it in \(Brand.displayName)'s Inbox before it becomes active.",
                 ])
             case .badName:
                 return httpResponse(400, json: ["error": "name must be lowercase-kebab (a-z, 0-9, hyphens)"])

@@ -17,7 +17,7 @@ struct SettingsView: View {
                         .resizable()
                         .frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("SkillHub")
+                        Text(Brand.displayName)
                             .font(.title3.bold())
                         Text("Version \(AppVersion.current)")
                             .font(AppText.secondary)
@@ -25,6 +25,7 @@ struct SettingsView: View {
                         Link("alexnicolai.github.io/skillhub",
                              destination: URL(string: "https://alexnicolai.github.io/skillhub/")!)
                             .font(AppText.small)
+                            .help("Product site (repo identifier: skillhub)")
                     }
                     Spacer()
                     Button("Check for Updates…") {
@@ -73,7 +74,7 @@ struct SettingsView: View {
             } header: {
                 Text("API server")
             } footer: {
-                Text("A tiny web server, visible only to this Mac, that lets your AI assistants ask SkillHub what skills you have. The \"skillhub\" skill installed in each tool teaches models to query it — so they always see your current catalog instead of a stale list.")
+                Text("A tiny web server, visible only to this Mac, that lets your AI assistants ask \(Brand.displayName) what skills you have. The \"skillhub\" skill installed in each tool teaches models to query it — so they always see your current catalog instead of a stale list.")
             }
 
             Section {
@@ -87,7 +88,7 @@ struct SettingsView: View {
             } header: {
                 Text("Per-tool link mode")
             } footer: {
-                Text("A symlink is a shortcut: the tool's skill folder just points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate instead, which SkillHub re-syncs by comparing checksums. Keep Symlink unless a tool proves unable to read skills through them.")
+                Text("A symlink is a shortcut: the tool's skill folder just points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate instead, which \(Brand.displayName) re-syncs by comparing checksums. Keep Symlink unless a tool proves unable to read skills through them.")
             }
 
             Section("Keyboard shortcuts") {
@@ -104,7 +105,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Launch SkillHub at login", isOn: $launchAtLogin)
+                Toggle("Launch \(Brand.displayName) at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
                             if enabled {

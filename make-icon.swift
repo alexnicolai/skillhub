@@ -1,7 +1,7 @@
 #!/usr/bin/swift
-// Renders AppIcon iconset from AppIcon-source.png (1024×1024).
-// The source has opaque corners; we clip to the macOS-style rounded rect the
-// artwork already draws, making everything outside it transparent.
+// Renders AppIcon iconset from AppIcon-source.png (1024×1024 RGBA).
+// Source should be full-bleed artwork with transparent corners (macOS squircle).
+// We scale with alpha preserved — no extra inset, so the icon fills the Dock tile.
 import AppKit
 
 let sourceURL = URL(fileURLWithPath: "AppIcon-source.png")
@@ -9,28 +9,18 @@ guard let source = NSImage(contentsOf: sourceURL) else {
     fatalError("AppIcon-source.png missing")
 }
 
-let canvas: CGFloat = 1024
-// Clip just inside the artwork's own drawn squircle so its anti-aliased white
-// edge doesn't leave a halo.
-let clipInset: CGFloat = 30
-let clipRadius: CGFloat = 185
-
 func drawIcon(size: CGFloat) -> NSImage {
-    let scale = size / canvas
     let image = NSImage(size: NSSize(width: size, height: size))
     image.lockFocus()
     defer { image.unlockFocus() }
-
-    let clipRect = NSRect(
-        x: clipInset * scale, y: clipInset * scale,
-        width: (canvas - clipInset * 2) * scale,
-        height: (canvas - clipInset * 2) * scale
-    )
-    NSBezierPath(roundedRect: clipRect, xRadius: clipRadius * scale, yRadius: clipRadius * scale)
-        .addClip()
+    NSGraphicsContext.current?.imageInterpolation = .high
     source.draw(
         in: NSRect(x: 0, y: 0, width: size, height: size),
-        from: .zero, operation: .sourceOver, fraction: 1
+        from: .zero,
+        operation: .sourceOver,
+        fraction: 1,
+        respectFlipped: false,
+        hints: [.interpolation: NSImageInterpolation.high]
     )
     return image
 }

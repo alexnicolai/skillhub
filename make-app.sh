@@ -1,5 +1,7 @@
 #!/bin/zsh
-# Builds SkillHub.app from the Swift package (release) into dist/.
+# Builds SkillHub.app (product display name: Skill Library) from the Swift
+# package (release) into dist/. Binary, bundle id, and .app basename stay
+# SkillHub for Sparkle continuity and CLI muscle memory.
 # Usage: ./make-app.sh [--install|--dmg]
 #   --install  copies to /Applications
 #   --dmg      also builds dist/SkillHub.dmg (drag-to-Applications)
@@ -32,9 +34,10 @@ for bundle in .build/release/*.bundle(N); do
   cp -R "$bundle" "$APP/Contents/Resources/"
 done
 
-# App icon (generated; cached across builds).
-if [[ ! -f dist/AppIcon.icns ]]; then
+# App icon (generated; rebuild when source is newer than the cache).
+if [[ ! -f dist/AppIcon.icns || AppIcon-source.png -nt dist/AppIcon.icns ]]; then
   echo "→ Rendering app icon…"
+  rm -rf dist/AppIcon.iconset dist/AppIcon.icns
   swift make-icon.swift
   iconutil -c icns dist/AppIcon.iconset -o dist/AppIcon.icns
   rm -rf dist/AppIcon.iconset
@@ -54,9 +57,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
     <key>CFBundleExecutable</key>          <string>SkillHub</string>
     <key>CFBundleIdentifier</key>          <string>com.alexnicolai.skillhub</string>
-    <key>CFBundleName</key>                <string>SkillHub</string>
+    <key>CFBundleName</key>                <string>Skill Library</string>
     <key>CFBundleIconFile</key>            <string>AppIcon</string>
-    <key>CFBundleDisplayName</key>         <string>SkillHub</string>
+    <key>CFBundleDisplayName</key>         <string>Skill Library</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
     <key>CFBundleShortVersionString</key>  <string>${VERSION}</string>
     <key>CFBundleVersion</key>             <string>${VERSION}</string>
@@ -107,7 +110,7 @@ if [[ "${1:-}" == "--dmg" ]]; then
   mkdir -p "$STAGING"
   cp -R "$APP" "$STAGING/SkillHub.app"
   ln -s /Applications "$STAGING/Applications"
-  hdiutil create -volname "SkillHub" -srcfolder "$STAGING" -ov -format UDZO \
+  hdiutil create -volname "Skill Library" -srcfolder "$STAGING" -ov -format UDZO \
     -fs HFS+ dist/SkillHub.dmg >/dev/null
   rm -rf "$STAGING"
   echo "✓ Built dist/SkillHub.dmg ($(du -h dist/SkillHub.dmg | cut -f1 | tr -d ' '))"

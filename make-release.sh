@@ -26,7 +26,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
   echo "✗ working tree not clean — commit first"; exit 1
 fi
 
-echo "═══ Releasing SkillHub ${TAG} ═══"
+echo "═══ Releasing Skill Library ${TAG} ═══"
 ./make-app.sh --dmg
 
 # Notarize when credentials exist (makes first-install friction-free too).
@@ -55,9 +55,9 @@ cat > docs/appcast.xml <<APPCAST
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>SkillHub</title>
+    <title>Skill Library</title>
     <item>
-      <title>SkillHub ${VERSION}</title>
+      <title>Skill Library ${VERSION}</title>
       <link>https://github.com/alexnicolai/skillhub/releases/tag/${TAG}</link>
       <sparkle:version>${VERSION}</sparkle:version>
       <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
@@ -76,7 +76,7 @@ git commit -m "release: ${TAG}"
 git tag "$TAG"
 git push origin main --tags
 gh release create "$TAG" "$ZIP" dist/SkillHub.dmg \
-  --title "SkillHub ${VERSION}" --notes "$NOTES"
+  --title "Skill Library ${VERSION}" --notes "$NOTES"
 
 echo ""
 echo "✓ ${TAG} is live."
