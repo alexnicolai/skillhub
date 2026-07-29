@@ -3,7 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    @AppStorage("githubToken") private var githubToken: String = ""
+    @State private var githubToken: String = TokenStore.get() ?? ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -56,10 +56,11 @@ struct SettingsView: View {
 
             Section {
                 SecureField("Personal access token (optional)", text: $githubToken)
+                    .onChange(of: githubToken) { TokenStore.set(githubToken) }
             } header: {
                 Text("GitHub")
             } footer: {
-                Text("Used only to check skills' source repositories for new versions (the \"Update\" badges). Without a token, GitHub allows 60 anonymous checks per hour — plenty for most people, but a token removes the limit. Create one at github.com → Settings → Developer settings; read-only public access is enough. It never leaves this Mac.")
+                Text("Used only to check skills' source repositories for new versions (the \"Update\" badges). Without a token, GitHub allows 60 anonymous checks per hour — plenty for most people, but a token removes the limit. Create one at github.com → Settings → Developer settings; read-only public access is enough. Stored in your login Keychain, never in plain text.")
             }
 
             Section {

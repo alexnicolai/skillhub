@@ -41,7 +41,7 @@ struct RepoBrowser {
     let token: String?
 
     init(token: String? = nil) {
-        self.token = token ?? UserDefaults.standard.string(forKey: "githubToken")
+        self.token = token ?? TokenStore.get()
     }
 
     /// Every folder in the repo containing a SKILL.md, with descriptions.

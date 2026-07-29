@@ -3,12 +3,14 @@ import SwiftUI
 struct SkillRowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let skill: Skill
+    var isSelected = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(skill.name)
                     .font(AppText.bodySemibold)
+                    .foregroundStyle(Color(nsColor: .labelColor))
                     .lineLimit(1)
                 if skill.updateAvailable {
                     Badge(text: "Update", systemImage: "arrow.down.circle.fill", color: .brand)
@@ -25,14 +27,14 @@ struct SkillRowView: View {
                 if skill.usageCount > 0 {
                     Text("\(skill.usageCount)×")
                         .font(AppText.small.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Color(nsColor: .tertiaryLabelColor))
                         .help("Used \(skill.usageCount) times")
                 }
             }
 
             Text(skill.summary)
                 .font(AppText.secondary)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
 
@@ -64,9 +66,27 @@ struct SkillRowView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        // Selection painted here, over the row: macOS overrides the app accent
+        // for its own selection pill when the user picked a system accent
+        // colour, so we cover it with an opaque layer + brand fill.
+        .background {
+            if isSelected {
+                ZStack {
+                    Color(nsColor: .controlBackgroundColor)
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.brand.opacity(0.22))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                }
+            }
+        }
+        // The system flips row text to white for its own selection style;
+        // ours is a light tint, so keep standard text colors.
+        .environment(\.backgroundProminence, .standard)
         .hoverHighlight()
         .animation(Motion.small, value: skill.updateAvailable)
     }

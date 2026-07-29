@@ -28,6 +28,11 @@ struct SkillHubApp: App {
                             appState.startServer()
                             appState.checkForUpdates()
                             _ = AppUpdater.controller   // start update checks
+                            // Never open onto an empty pane.
+                            if appState.selectedSkillNames.isEmpty,
+                               let first = appState.filteredSkills.first {
+                                appState.selectedSkillNames = [first.name]
+                            }
                         }
                 } else {
                     OnboardingView()

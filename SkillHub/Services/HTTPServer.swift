@@ -106,6 +106,19 @@ final class HTTPServer: @unchecked Sendable {
 
     private func route(rawRequest: Data, headerEnd: Range<Data.Index>) -> Data {
         let head = String(data: rawRequest[..<headerEnd.lowerBound], encoding: .utf8) ?? ""
+
+        // DNS-rebinding guard: a hostile site whose DNS resolves to 127.0.0.1
+        // becomes same-origin with this server. Only honest local Hosts pass.
+        if let hostLine = head.components(separatedBy: "\r\n")
+            .first(where: { $0.lowercased().hasPrefix("host:") }) {
+            let host = hostLine.dropFirst(5)
+                .trimmingCharacters(in: .whitespaces)
+                .split(separator: ":").first.map(String.init)?.lowercased() ?? ""
+            guard host == "127.0.0.1" || host == "localhost" || host == "[::1]" else {
+                return httpResponse(403, json: ["error": "forbidden host"])
+            }
+        }
+
         let requestLine = head.components(separatedBy: "\r\n").first ?? ""
         let parts = requestLine.split(separator: " ")
         guard parts.count >= 2 else { return httpResponse(400, json: ["error": "bad request"]) }
@@ -254,7 +267,8 @@ final class HTTPServer: @unchecked Sendable {
         var response = "HTTP/1.1 \(status) \(statusText[status] ?? "")\r\n"
         response += "Content-Type: application/json\r\n"
         response += "Content-Length: \(body.count)\r\n"
-        response += "Access-Control-Allow-Origin: *\r\n"
+        // No CORS header: browser pages must NOT be able to read this API —
+        // it's for local CLIs and agents only.
         response += "Connection: close\r\n\r\n"
         var out = Data(response.utf8)
         out.append(body)

@@ -5,9 +5,13 @@
 <h1 align="center">SkillHub</h1>
 
 <p align="center">
-  One source of truth for your AI agent skills.<br/>
-  A native macOS app that manages <code>SKILL.md</code> folders across
+  The home for your AI agent skills.<br/>
+  A native macOS app that creates, installs, organizes, and syncs <code>SKILL.md</code> folders across
   <b>Claude Code, Cursor, Codex, OpenCode, Gemini CLI, and Kiro</b>.
+</p>
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="SkillHub main window" width="820" />
 </p>
 
 ---
@@ -19,17 +23,24 @@ If you use more than one AI coding tool, your skills scatter: copies drift apart
 ## What SkillHub does
 
 - **One store.** All skills live in a single git repo (`~/ai-skills` by default). Every tool reads them through per-skill **symlinks** — edit once, every tool sees it instantly.
-- **Dashboard.** Every skill with its summary, source, per-tool install state, and usage count.
-- **Edit in place.** Rendered markdown preview + raw editor. Frontmatter parsed and shown as metadata.
-- **Provenance & updates.** Skills installed from GitHub keep their source; SkillHub checks upstream tree hashes and updates with one click (local-edit guard included).
-- **Drift detection.** If a tool dir diverges from the store, you get a badge and a one-click repair — originals are always backed up first.
-- **Usage metrics.** Counts skill invocations from Claude Code transcripts.
-- **Cross-machine sync.** The store is a git repo: commit/push/pull from the toolbar, clone + adopt on your other Macs.
-- **An API agents can query.** `http://127.0.0.1:4477` serves the live catalog, and a generated `skillhub` meta-skill teaches your models to use it:
+- **Create & edit.** `⌘N` scaffolds a well-formed skill; rendered preview + raw editor; `⌘K` fuzzy-jumps to any skill.
+- **Install from GitHub.** Browse any repo's SKILL.md folders, cherry-pick, install with provenance wired for updates.
+- **Tags, not folders.** Tag skills (or drag them onto sidebar tags), filter instantly, bulk-tag and bulk-remove selections.
+- **Updates with diffs.** SkillHub compares skills against their source repos, shows what changed before you update, and guards local edits. The app updates itself via Sparkle.
+- **Skill doctor.** Broken frontmatter, dead links, and oversized skills (context-window cost) surfaced automatically.
+- **Drift & conflicts.** Diverged tool copies get a badge, a diff, and one-click resolution — with backups, always.
+- **Usage metrics.** Counts skill invocations from Claude Code transcripts; a smart group surfaces never-used skills for pruning.
+- **Cross-machine sync.** Commit/push/pull from the toolbar; clone + adopt on your other Macs.
+- **Version history.** Every skill's git history in the app, with one-click restore.
+- **Agents read — and write.** A localhost API serves the live catalog, and agents can **propose** skills into a review inbox (`POST /skills`). Nothing activates without your approval.
 
 ```sh
 curl -s http://127.0.0.1:4477/skills
 ```
+
+### Security
+
+The API binds to loopback only, validates the `Host` header (DNS-rebinding protection), and sends no CORS headers — web pages can't read it. Your GitHub token lives in the Keychain. Updates are EdDSA-signed and releases are notarized.
 
 ## Install
 

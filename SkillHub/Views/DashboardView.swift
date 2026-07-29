@@ -81,17 +81,11 @@ struct DashboardView: View {
         // Rows are draggable onto sidebar tags; drag any selected row to
         // carry the whole selection.
         return List(state.filteredSkills, selection: $state.selectedSkillNames) { skill in
-            SkillRowView(skill: skill)
+            SkillRowView(skill: skill,
+                         isSelected: state.selectedSkillNames.contains(skill.name))
                 .tag(skill.name)
                 .draggable(skill.name)
-                // Explicit brand selection: the system accent overrides
-                // NSAccentColorName when the user picked a fixed accent colour.
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(state.selectedSkillNames.contains(skill.name)
-                              ? Color.brand.opacity(0.24) : .clear)
-                        .padding(.horizontal, 6)
-                )
+                .listRowInsets(EdgeInsets())
                 .contextMenu {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])

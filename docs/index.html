@@ -6,8 +6,8 @@
 <title>SkillHub — one source of truth for your AI agent skills</title>
 <meta name="description" content="A native macOS app that manages SKILL.md skills across Claude Code, Cursor, Codex, OpenCode, Gemini CLI, and Kiro. One store, symlinked everywhere, synced with git." />
 <meta property="og:title" content="SkillHub" />
-<meta property="og:description" content="One source of truth for your AI agent skills — across every tool, on every machine." />
-<meta property="og:image" content="https://alexnicolai.github.io/skillhub/icon.png" />
+<meta property="og:description" content="The home for your AI agent skills — create, install, organize, and sync them across every tool and machine." />
+<meta property="og:image" content="https://alexnicolai.github.io/skillhub/screenshot.png" />
 <link rel="icon" href="icon.png" />
 <style>
   :root {
@@ -53,6 +53,11 @@
   .btn-secondary:hover { border-color: var(--muted); }
   .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
   .note code { font-size: 12px; }
+  .hero-shot {
+    display: block; width: 100%; max-width: 980px; margin: 40px auto 0;
+    border-radius: 12px; border: 1px solid var(--border);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .18);
+  }
 
   section { padding: 40px 0; }
   h2 { font-size: 26px; letter-spacing: -0.02em; margin-bottom: 20px; }
@@ -91,24 +96,28 @@
 <header class="wrap">
   <img class="icon" src="icon.png" alt="SkillHub app icon" width="128" height="128" />
   <h1>SkillHub</h1>
-  <p class="tagline">One source of truth for your AI agent skills — across every tool, on every machine.</p>
+  <p class="tagline">The home for your AI agent skills. Create, install, organize, and update them once — every tool and every machine stays in sync.</p>
   <p class="tools">Works with <b>Claude Code</b> · <b>Cursor</b> · <b>Codex</b> · <b>OpenCode</b> · <b>Gemini CLI</b> · <b>Kiro</b></p>
   <div class="cta-row">
     <a class="btn btn-primary" href="https://github.com/alexnicolai/skillhub/releases/latest">Download for Mac</a>
     <a class="btn btn-secondary" href="https://github.com/alexnicolai/skillhub">View on GitHub</a>
   </div>
   <p class="note">Free &amp; open source (MIT) · macOS 14+ · auto-updates built in · signed &amp; notarized</p>
+  <img class="hero-shot" src="screenshot.png" alt="SkillHub: sidebar with tags and review queues, skill list, and a skill's rendered SKILL.md with per-tool toggles" />
 </header>
 
 <section class="wrap">
-  <h2>Your skills are scattered. SkillHub unifies them.</h2>
+  <h2>The full lifecycle, in one app.</h2>
   <div class="grid">
     <div class="card"><span class="emoji">🗂️</span><h3>One store, every tool</h3><p>All skills live in a single git repo. Each tool's skill directory becomes symlinks into it — edit once, every tool sees it instantly.</p></div>
-    <div class="card"><span class="emoji">🔎</span><h3>Know what you have</h3><p>A dashboard of every skill: summary, which tools have it, where it came from, and how often you actually use it.</p></div>
-    <div class="card"><span class="emoji">⬆️</span><h3>Updates, one click</h3><p>Skills installed from GitHub keep their provenance. SkillHub spots upstream changes and updates without clobbering your local edits. The app updates itself too (Sparkle).</p></div>
-    <div class="card"><span class="emoji">🛡️</span><h3>Drift detection</h3><p>If a tool's copy diverges from the store, you get a badge and a one-click repair. Every change is backed up first.</p></div>
+    <div class="card"><span class="emoji">✍️</span><h3>Create &amp; edit</h3><p>⌘N scaffolds a well-formed skill; a rendered preview and raw editor keep SKILL.md honest. ⌘K fuzzy-jumps across hundreds of skills.</p></div>
+    <div class="card"><span class="emoji">📦</span><h3>Install from GitHub</h3><p>Point at any repo with SKILL.md folders, cherry-pick what you want, and install with provenance — updates stay one click away.</p></div>
+    <div class="card"><span class="emoji">#️⃣</span><h3>Tags, not folders</h3><p>Group skills your way: tag from the header, drag skills onto sidebar tags, filter instantly, bulk-tag whole selections.</p></div>
+    <div class="card"><span class="emoji">⬆️</span><h3>Updates with diffs</h3><p>SkillHub watches skills' source repos and shows exactly what changed before you update. Local edits are guarded, and the app updates itself too.</p></div>
+    <div class="card"><span class="emoji">🩺</span><h3>Skill doctor</h3><p>Broken frontmatter, dead links, oversized files that tax your context window — found automatically, listed plainly, one smart group away.</p></div>
+    <div class="card"><span class="emoji">🛡️</span><h3>Drift &amp; conflicts</h3><p>If a tool's copy diverges, you get a badge, a diff, and a one-click resolution. Every change is backed up first; git history keeps everything.</p></div>
     <div class="card"><span class="emoji">💻</span><h3>Sync across machines</h3><p>The store is a plain git repo. Push it to GitHub, clone on another Mac, run adopt — done.</p></div>
-    <div class="card"><span class="emoji">🤖</span><h3>Agents can query it</h3><p>A local API plus a generated meta-skill means any model can ask SkillHub for your current skills — no stale listings.</p></div>
+    <div class="card"><span class="emoji">🤖</span><h3>Agents read — and write</h3><p>A local API lets any model query your live catalog, and agents can propose new skills into a review inbox. You approve; they never write directly.</p></div>
   </div>
 </section>
 
@@ -132,7 +141,11 @@ $ curl -s http://127.0.0.1:4477/skills
 <span class="g">{ "skills": [ { "name": "animate", "tools": ["claude","cursor","codex"], … } ] }</span>
 
 $ curl -s http://127.0.0.1:4477/skills/animate
-<span class="g">{ "name": "animate", "skillMd": "---\nname: animate\n…", "files": [ … ] }</span></pre>
+<span class="g">{ "name": "animate", "skillMd": "---\nname: animate\n…", "files": [ … ] }</span>
+
+<span class="c"># agents can even propose new skills — they land in your review inbox:</span>
+$ curl -s -X POST http://127.0.0.1:4477/skills -d '{"name": "…", "skillMd": "…"}'
+<span class="g">{ "status": "pending-review" }</span></pre>
 </section>
 
 <section class="wrap">

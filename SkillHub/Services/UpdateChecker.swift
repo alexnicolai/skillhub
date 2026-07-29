@@ -29,7 +29,7 @@ struct UpdateChecker {
         maxCacheAge: TimeInterval = 6 * 3600
     ) {
         self.cacheURL = cacheURL
-        self.token = token ?? UserDefaults.standard.string(forKey: "githubToken")
+        self.token = token ?? TokenStore.get()
         self.maxCacheAge = maxCacheAge
     }
 
