@@ -65,6 +65,23 @@ final class AppState {
         persistManifest()
     }
 
+    /// Link every skill in the library into one tool (Settings → Link All).
+    func enableAll(for tool: Tool) {
+        do {
+            try withSuppressedWatcher {
+                for skill in skills where !skill.liveTools.contains(tool) {
+                    try engine.enable(skill: skill.name, for: tool)
+                    manifest.skills[skill.name]?.tools[tool.rawValue] = true
+                }
+                try ManifestIO.save(manifest)
+            }
+            loadError = nil
+        } catch {
+            loadError = "Link all failed: \(error.localizedDescription)"
+        }
+        reload()
+    }
+
     // MARK: - Bulk operations
 
     /// Tag several skills at once (bulk pane, drag-onto-tag).
@@ -309,7 +326,7 @@ final class AppState {
                     tools: [:],
                     addedAt: Date()
                 )
-                for tool in Tool.allCases {
+                for tool in Tool.active {
                     try? engine.enable(skill: submission.name, for: tool)
                     manifest.skills[submission.name]?.tools[tool.rawValue] = true
                 }
@@ -371,7 +388,7 @@ final class AppState {
                     tools: [:],
                     addedAt: Date()
                 )
-                for tool in Tool.allCases {
+                for tool in Tool.active {
                     try? engine.enable(skill: skill.name, for: tool)
                     manifest.skills[skill.name]?.tools[tool.rawValue] = true
                 }

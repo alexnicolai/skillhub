@@ -145,9 +145,7 @@ struct OnboardingView: View {
             Text("\(Brand.displayName) imports every skill your tools already have into the store (originals are backed up), then links the tools to it.")
                 .foregroundStyle(.secondary)
 
-            let detected = Tool.allCases.filter {
-                FileManager.default.fileExists(atPath: $0.skillsDir.deletingLastPathComponent().path)
-            }
+            let detected = Tool.active
             HStack(spacing: 6) {
                 ForEach(detected) { tool in
                     Badge(text: tool.displayName, systemImage: "checkmark", color: .tool(tool))

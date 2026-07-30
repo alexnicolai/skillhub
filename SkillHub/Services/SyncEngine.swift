@@ -128,7 +128,7 @@ struct SyncEngine {
 
     /// Claude and kiro first (already symlink farms), codex last (flagged risk).
     var conversionOrder: [Tool] {
-        [.claude, .kiro, .opencode, .gemini, .cursor, .codex].filter { toolDirs[$0] != nil }
+        [.claude, .kiro, .opencode, .gemini, .cursor, .codex, .grok].filter { toolDirs[$0] != nil }
     }
 
     // MARK: - Migration (repo layout)
@@ -410,6 +410,8 @@ struct SyncEngine {
             throw NSError(domain: "SkillHub", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "No canonical skill named \(name)"])
         }
+        // First link for a tool may need its skills dir created (e.g. Grok).
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
         let entry = dir.appendingPathComponent(name)
         if fm.fileExists(atPath: entry.path) { try fm.removeItem(at: entry) }
         try fm.createSymbolicLink(at: entry, withDestinationURL: canonical)

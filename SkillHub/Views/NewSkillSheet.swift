@@ -8,7 +8,7 @@ struct NewSkillSheet: View {
     @State private var name = ""
     @State private var description = ""
     @State private var tagsText = ""
-    @State private var tools: Set<Tool> = Set(Tool.allCases)
+    @State private var tools: Set<Tool> = Set(Tool.active)
     @State private var errorText: String?
     @FocusState private var nameFocused: Bool
 
@@ -51,7 +51,7 @@ struct NewSkillSheet: View {
                     .kerning(0.8)
                     .foregroundStyle(.tertiary)
                 HStack(spacing: 6) {
-                    ForEach(Tool.allCases) { tool in
+                    ForEach(Tool.active) { tool in
                         let on = tools.contains(tool)
                         Button {
                             if on { tools.remove(tool) } else { tools.insert(tool) }

@@ -8,7 +8,7 @@ struct ToolTogglesView: View {
 
     var body: some View {
         FlowLayout(spacing: 6, rowSpacing: 6) {
-            ForEach(Tool.allCases) { tool in
+            ForEach(Tool.active) { tool in
                 TogglePill(
                     tool: tool,
                     isOn: skill.liveTools.contains(tool),

@@ -108,7 +108,7 @@ if [[ "${1:-}" == "--dmg" ]]; then
   STAGING=dist/dmg-staging
   rm -rf "$STAGING" dist/SkillHub.dmg
   mkdir -p "$STAGING"
-  cp -R "$APP" "$STAGING/SkillHub.app"
+  cp -R "$APP" "$STAGING/Skill Library.app"   # brand-named for the drag-install
   ln -s /Applications "$STAGING/Applications"
   hdiutil create -volname "Skill Library" -srcfolder "$STAGING" -ov -format UDZO \
     -fs HFS+ dist/SkillHub.dmg >/dev/null

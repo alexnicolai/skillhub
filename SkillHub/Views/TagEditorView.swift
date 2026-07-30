@@ -33,15 +33,24 @@ struct TagEditorView: View {
                     adding = true
                     fieldFocused = true
                 } label: {
-                    if skill.tags.isEmpty {
-                        Label("Add tag", systemImage: "plus")
-                            .font(AppText.small)
-                    } else {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .semibold))
+                    Group {
+                        if skill.tags.isEmpty {
+                            Label("Add tag", systemImage: "plus")
+                                .font(AppText.small)
+                        } else {
+                            Image(systemName: "plus")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
                     }
+                    .padding(.horizontal, skill.tags.isEmpty ? 8 : 5)
+                    .padding(.vertical, 3.5)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(.quaternary, style: StrokeStyle(lineWidth: 1, dash: [3, 2.5]))
+                    )
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(PressableButtonStyle())
                 .foregroundStyle(.secondary)
                 .help("Tag this skill to group it — tags appear in the sidebar")
 

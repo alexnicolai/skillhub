@@ -230,6 +230,7 @@ extension Color {
         case .opencode: return .cyan
         case .gemini: return .indigo
         case .kiro: return .pink
+        case .grok: return .gray
         }
     }
 }

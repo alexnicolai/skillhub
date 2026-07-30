@@ -1,39 +1,54 @@
 import SwiftUI
 import ServiceManagement
 
+/// Tabbed settings: General (identity + store), Tools (detection, linking,
+/// GitHub, API), Shortcuts. Grouped forms with room to breathe.
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            GeneralSettingsTab()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ToolsSettingsTab()
+                .tabItem { Label("Tools", systemImage: "wrench.and.screwdriver") }
+            ShortcutsSettingsTab()
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+        }
+        .frame(width: 600, height: 560)
+    }
+}
+
+// MARK: - General
+
+private struct GeneralSettingsTab: View {
     @Environment(AppState.self) private var appState
-    @State private var githubToken: String = TokenStore.get() ?? ""
+    @AppStorage("onboarded") private var onboarded = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
-
-    @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
         Form {
             Section {
-                HStack(spacing: 14) {
+                HStack(spacing: 16) {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
-                        .frame(width: 64, height: 64)
-                    VStack(alignment: .leading, spacing: 2) {
+                        .frame(width: 72, height: 72)
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(Brand.displayName)
-                            .font(.title3.bold())
+                            .font(.title2.bold())
                         Text("Version \(AppVersion.current)")
                             .font(AppText.secondary)
                             .foregroundStyle(.secondary)
                         Link("alexnicolai.github.io/skillhub",
                              destination: URL(string: "https://alexnicolai.github.io/skillhub/")!)
                             .font(AppText.small)
-                            .help("Product site (repo identifier: skillhub)")
                     }
                     Spacer()
                     Button("Check for Updates…") {
                         AppUpdater.controller.checkForUpdates(nil)
                     }
-                    .controlSize(.small)
+                    .buttonStyle(.bordered)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
             }
 
             Section {
@@ -56,55 +71,6 @@ struct SettingsView: View {
             }
 
             Section {
-                SecureField("Personal access token (optional)", text: $githubToken)
-                    .onChange(of: githubToken) { TokenStore.set(githubToken) }
-            } header: {
-                Text("GitHub")
-            } footer: {
-                Text("Used only to check skills' source repositories for new versions (the \"Update\" badges). Without a token, GitHub allows 60 anonymous checks per hour — plenty for most people, but a token removes the limit. Create one at github.com → Settings → Developer settings; read-only public access is enough. Stored in your login Keychain, never in plain text.")
-            }
-
-            Section {
-                if appState.serverPort > 0 {
-                    LabeledContent("Address", value: "http://127.0.0.1:\(String(appState.serverPort))")
-                } else {
-                    Text(appState.serverError ?? "Server not running")
-                        .foregroundStyle(.red)
-                }
-            } header: {
-                Text("API server")
-            } footer: {
-                Text("A tiny web server, visible only to this Mac, that lets your AI assistants ask \(Brand.displayName) what skills you have. The \"skillhub\" skill installed in each tool teaches models to query it — so they always see your current catalog instead of a stale list.")
-            }
-
-            Section {
-                ForEach(Tool.allCases) { tool in
-                    Picker(tool.displayName, selection: linkModeBinding(for: tool)) {
-                        Text("Symlink").tag(LinkMode.symlink)
-                        Text("Copy").tag(LinkMode.copy)
-                    }
-                    .pickerStyle(.segmented)
-                }
-            } header: {
-                Text("Per-tool link mode")
-            } footer: {
-                Text("A symlink is a shortcut: the tool's skill folder just points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate instead, which \(Brand.displayName) re-syncs by comparing checksums. Keep Symlink unless a tool proves unable to read skills through them.")
-            }
-
-            Section("Keyboard shortcuts") {
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
-                    shortcutRow("⌘K", "Go to skill (fuzzy search)")
-                    shortcutRow("⌘N", "New skill")
-                    shortcutRow("⇧⌘I", "Install from GitHub")
-                    shortcutRow("⇧⌘G", "Git sync panel")
-                    shortcutRow("⌘R", "Refresh catalog + check updates")
-                    shortcutRow("⌘S", "Save (in the skill editor)")
-                    shortcutRow("⌘,", "Settings")
-                }
-                .padding(.vertical, 2)
-            }
-
-            Section {
                 Toggle("Launch \(Brand.displayName) at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         do {
@@ -120,27 +86,98 @@ struct SettingsView: View {
                         }
                     }
                 if let loginError {
-                    Text(loginError).font(.caption).foregroundStyle(.red)
+                    Text(loginError).font(AppText.secondary).foregroundStyle(.red)
                 }
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Keeps the catalog API available for your agents whenever the Mac is on.")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480)
-        .padding()
     }
+}
 
-    private func shortcutRow(_ keys: String, _ what: String) -> some View {
-        GridRow {
-            Text(keys)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
-                .gridColumnAlignment(.trailing)
-            Text(what)
-                .font(AppText.secondary)
-                .foregroundStyle(.secondary)
+// MARK: - Tools
+
+private struct ToolsSettingsTab: View {
+    @Environment(AppState.self) private var appState
+    @State private var githubToken: String = TokenStore.get() ?? ""
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(Tool.allCases) { tool in
+                    HStack {
+                        Label {
+                            Text(tool.displayName)
+                        } icon: {
+                            Circle()
+                                .fill(tool.isInstalled ? Color.tool(tool) : Color.secondary.opacity(0.3))
+                                .frame(width: 8, height: 8)
+                        }
+                        Spacer()
+                        if tool.isInstalled {
+                            let linked = appState.skills.filter { $0.liveTools.contains(tool) }.count
+                            Text("\(linked) of \(appState.skills.count) linked")
+                                .font(AppText.secondary)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            if linked < appState.skills.count {
+                                Button("Link All") { appState.enableAll(for: tool) }
+                                    .controlSize(.small)
+                                    .help("Symlink every skill in the library into \(tool.displayName)")
+                            }
+                        } else {
+                            Text("Not detected")
+                                .font(AppText.secondary)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Detected tools")
+            } footer: {
+                Text("Tools appear automatically when their app or command-line binary is found. Undetected tools stay hidden throughout the app; install one and it shows up on the next launch.")
+            }
+
+            Section {
+                ForEach(Tool.active) { tool in
+                    Picker(tool.displayName, selection: linkModeBinding(for: tool)) {
+                        Text("Symlink").tag(LinkMode.symlink)
+                        Text("Copy").tag(LinkMode.copy)
+                    }
+                    .pickerStyle(.segmented)
+                }
+            } header: {
+                Text("Link mode")
+            } footer: {
+                Text("A symlink is a shortcut: the tool's skill folder points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate that gets re-synced by checksum. Keep Symlink unless a tool can't read through them.")
+            }
+
+            Section {
+                SecureField("Personal access token (optional)", text: $githubToken)
+                    .onChange(of: githubToken) { TokenStore.set(githubToken) }
+            } header: {
+                Text("GitHub")
+            } footer: {
+                Text("Used only to check skills' source repositories for new versions. Without a token, GitHub allows 60 anonymous checks per hour — a token removes the limit and enables private repos. Stored in your login Keychain, never in plain text.")
+            }
+
+            Section {
+                if appState.serverPort > 0 {
+                    LabeledContent("Address", value: "http://127.0.0.1:\(String(appState.serverPort))")
+                } else {
+                    Text(appState.serverError ?? "Server not running")
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("API server")
+            } footer: {
+                Text("A tiny web server, visible only to this Mac, that lets your AI assistants query your live skill catalog — and propose new skills into the review Inbox.")
+            }
         }
+        .formStyle(.grouped)
     }
 
     private func linkModeBinding(for tool: Tool) -> Binding<LinkMode> {
@@ -154,5 +191,39 @@ struct SettingsView: View {
                 appState.reload()
             }
         )
+    }
+}
+
+// MARK: - Shortcuts
+
+private struct ShortcutsSettingsTab: View {
+    var body: some View {
+        Form {
+            Section("Keyboard shortcuts") {
+                shortcutRow("⌘K", "Go to skill (fuzzy search)")
+                shortcutRow("⌘N", "New skill")
+                shortcutRow("⇧⌘I", "Install from GitHub")
+                shortcutRow("⇧⌘G", "Git sync panel")
+                shortcutRow("⌘R", "Refresh catalog + check updates")
+                shortcutRow("⌘S", "Save (in the skill editor)")
+                shortcutRow("⌘,", "Settings")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func shortcutRow(_ keys: String, _ what: String) -> some View {
+        LabeledContent {
+            Text(what)
+                .font(AppText.body)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text(keys)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+        }
     }
 }

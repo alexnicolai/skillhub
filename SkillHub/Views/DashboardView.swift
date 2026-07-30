@@ -81,11 +81,9 @@ struct DashboardView: View {
         // Rows are draggable onto sidebar tags; drag any selected row to
         // carry the whole selection.
         return List(state.filteredSkills, selection: $state.selectedSkillNames) { skill in
-            SkillRowView(skill: skill,
-                         isSelected: state.selectedSkillNames.contains(skill.name))
+            SkillRowView(skill: skill)
                 .tag(skill.name)
                 .draggable(skill.name)
-                .listRowInsets(EdgeInsets())
                 .contextMenu {
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
@@ -228,7 +226,7 @@ struct DashboardView: View {
     }
 
     private var activeToolCount: Int {
-        Tool.allCases.filter { FileManager.default.fileExists(atPath: $0.skillsDir.path) }.count
+        Tool.active.count
     }
 
     private var contentTitle: String {
