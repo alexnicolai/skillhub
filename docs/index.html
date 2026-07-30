@@ -70,6 +70,8 @@
   }
   .icon {
     width: 116px; height: 116px;
+    background: transparent;
+    /* drop-shadow follows alpha — avoid box-shadow which paints a black rect */
     filter: drop-shadow(0 10px 28px rgba(128, 112, 255, .30));
   }
   h1 {
@@ -238,7 +240,7 @@
 <body>
 
 <header><div class="wrap">
-  <img class="icon" src="icon.png" alt="" width="116" height="116" />
+  <img class="icon" src="icon.png" alt="Skill Library" width="116" height="116" decoding="async" />
   <h1>Skill Library</h1>
   <p class="tagline">The home for your AI agent skills. Create, install, organize, and update them once — every tool and every machine stays in sync.</p>
   <p class="tools">works with <b>Claude Code</b> · <b>Cursor</b> · <b>Codex</b> · <b>OpenCode</b> · <b>Gemini CLI</b> · <b>Kiro</b></p>
