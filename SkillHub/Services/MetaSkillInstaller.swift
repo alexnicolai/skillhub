@@ -8,7 +8,15 @@ enum MetaSkillInstaller {
 
     @discardableResult
     static func install(engine: SyncEngine, port: UInt16) throws -> Bool {
-        guard let templateURL = Bundle.module.url(forResource: "MetaSkillTemplate", withExtension: "md"),
+        // Swift 6.3's generated Bundle.module accessor looks for the resource
+        // bundle beside the .app, while make-app.sh correctly embeds it in
+        // Contents/Resources. Prefer the embedded bundle when running as an app
+        // and retain Bundle.module for command-line and test builds.
+        let embeddedBundle = Bundle.main.resourceURL
+            .flatMap { Bundle(url: $0.appendingPathComponent("SkillHub_SkillHub.bundle")) }
+        let resourceBundle = embeddedBundle ?? Bundle.module
+
+        guard let templateURL = resourceBundle.url(forResource: "MetaSkillTemplate", withExtension: "md"),
               let template = try? String(contentsOf: templateURL, encoding: .utf8) else {
             throw NSError(domain: "SkillHub", code: 7,
                           userInfo: [NSLocalizedDescriptionKey: "MetaSkillTemplate.md missing from bundle"])
