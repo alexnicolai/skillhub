@@ -16,7 +16,9 @@
 
 > **Identifiers:** The product is **Skill Library**. The GitHub repo, CLI binary, and app bundle
 > basename remain `skillhub` / `SkillHub` so clone URLs, Sparkle updates, and scripts stay stable
-> (`com.alexnicolai.skillhub`, `/Applications/SkillHub.app`, `SkillHub status`).
+> (`com.alexnicolai.skillhub`, `/Applications/SkillHub.app`, `SkillHub status`). The same goes for
+> on-disk data — the `skillhub.json` manifest, `~/Library/Application Support/SkillHub`, and the
+> `skillhub` meta-skill keep their names so existing stores and installs continue to work unchanged.
 
 ---
 
