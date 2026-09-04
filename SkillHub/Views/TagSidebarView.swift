@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Leftmost column: library scopes + user-defined tags.
-/// Tags replace folders — one skill can carry many, and clicking one scopes
-/// the skill list instantly.
+/// Leftmost column: library scopes, review queues, per-tool coverage, and
+/// user-defined tags. Tags replace folders — one skill can carry many, and
+/// clicking one scopes the skill list instantly.
 struct TagSidebarView: View {
     @Environment(AppState.self) private var appState
 
@@ -13,6 +13,12 @@ struct TagSidebarView: View {
                 Label("All Skills", systemImage: "square.stack.3d.up")
                     .badge(appState.skills.count)
                     .tag(SidebarItem.all)
+                if !appState.gapSkills.isEmpty {
+                    Label("Not in every tool", systemImage: "circle.dotted")
+                        .badge(appState.gapSkills.count)
+                        .tag(SidebarItem.gaps)
+                        .help("Skills at least one of your tools can't see yet")
+                }
                 if !appState.updateAvailable.isEmpty {
                     Label("Updates", systemImage: "arrow.down.circle")
                         .badge(appState.updateAvailable.count)
@@ -24,7 +30,7 @@ struct TagSidebarView: View {
                         .tag(SidebarItem.issues)
                         .help("Skills with health problems: bad frontmatter, broken links, oversized files")
                 }
-                if appState.unusedCount > 0 {
+                if appState.unusedCount > 0 && appState.unusedCount < appState.skills.count {
                     Label("No recorded uses", systemImage: "moon.zzz")
                         .badge(appState.unusedCount)
                         .tag(SidebarItem.unused)
@@ -48,6 +54,21 @@ struct TagSidebarView: View {
                 }
             }
 
+            Section {
+                ForEach(appState.activeTools) { tool in
+                    ToolRow(tool: tool, linked: appState.linkedCount(for: tool), total: appState.skills.count)
+                        .tag(SidebarItem.tool(tool))
+                }
+            } header: {
+                Text("Tools")
+            } footer: {
+                if appState.activeTools.isEmpty {
+                    Text("No AI tools detected. Turn one on in Settings → Tools.")
+                        .font(AppText.small)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Tags") {
                 if appState.allTags.isEmpty {
                     Text("Tag a skill to group it — tags show up here for one-click filtering.")
@@ -63,6 +84,55 @@ struct TagSidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle(Brand.displayName)
+    }
+
+    /// One tool: colored dot, coverage fraction, and a link-all shortcut.
+    private struct ToolRow: View {
+        @Environment(AppState.self) private var appState
+        let tool: Tool
+        let linked: Int
+        let total: Int
+
+        private var complete: Bool { total > 0 && linked == total }
+
+        var body: some View {
+            Label {
+                HStack(spacing: 6) {
+                    Text(tool.displayName)
+                    Spacer()
+                    if complete {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .help("Every skill is linked here")
+                    } else {
+                        Text("\(linked)/\(total)")
+                            .font(.system(size: 11).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } icon: {
+                ToolLogo(tool: tool, size: 13)
+                    .foregroundStyle(.secondary)
+            }
+            .contextMenu {
+                if !complete {
+                    Button {
+                        appState.enableAll(for: tool)
+                    } label: {
+                        Label("Link All \(total) Skills to \(tool.displayName)", systemImage: "link")
+                    }
+                }
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([tool.skillsDir])
+                } label: {
+                    Label("Reveal Skills Folder in Finder", systemImage: "folder")
+                }
+            }
+            .help(complete
+                  ? "\(tool.displayName) has every skill"
+                  : "\(tool.displayName) is missing \(total - linked) skills — right-click to link all")
+        }
     }
 
     /// One tag row: drop target for skills dragged from the list.

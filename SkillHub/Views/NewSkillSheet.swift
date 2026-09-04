@@ -50,20 +50,26 @@ struct NewSkillSheet: View {
                     .font(.system(size: 10, weight: .semibold))
                     .kerning(0.8)
                     .foregroundStyle(.tertiary)
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6, rowSpacing: 6) {
                     ForEach(Tool.active) { tool in
                         let on = tools.contains(tool)
                         Button {
                             if on { tools.remove(tool) } else { tools.insert(tool) }
                         } label: {
-                            Text(tool.displayName)
-                                .font(.system(size: 12, weight: .medium))
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4.5)
-                                .background(
-                                    on ? Color.tool(tool).opacity(0.14) : Color.primary.opacity(0.05),
-                                    in: Capsule())
-                                .foregroundStyle(on ? Color.tool(tool) : .secondary)
+                            HStack(spacing: 5) {
+                                ToolLogo(tool: tool, size: 11)
+                                Text(tool.displayName)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4.5)
+                            .background(on ? Color.primary.opacity(0.1) : Color.clear, in: Capsule())
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    on ? Color.clear : Color.primary.opacity(0.18),
+                                    style: StrokeStyle(lineWidth: 1, dash: on ? [] : [3, 2.5]))
+                            )
+                            .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                         }
                         .buttonStyle(PressableButtonStyle())
                     }

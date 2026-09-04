@@ -417,6 +417,16 @@ struct SyncEngine {
         try fm.createSymbolicLink(at: entry, withDestinationURL: canonical)
     }
 
+    /// True when the tool's entry is a symlink resolving to the canonical folder.
+    func isLinked(skill name: String, for tool: Tool) -> Bool {
+        guard let dir = toolDirs[tool] else { return false }
+        let entry = dir.appendingPathComponent(name)
+        guard let dest = try? fm.destinationOfSymbolicLink(atPath: entry.path) else { return false }
+        let absolute = dest.hasPrefix("/") ? dest : dir.appendingPathComponent(dest).path
+        return URL(fileURLWithPath: absolute).resolvingSymlinksInPath().path
+            == canonicalFolder(name).resolvingSymlinksInPath().path
+    }
+
     func disable(skill name: String, for tool: Tool) throws {
         guard let dir = toolDirs[tool] else { return }
         let entry = dir.appendingPathComponent(name)
@@ -503,8 +513,17 @@ struct SyncEngine {
             }
         }
         for tool in toolDirs.keys {
-            for name in scanTool(tool).realDirs {
+            let scan = scanTool(tool)
+            for name in scan.realDirs {
                 consider(name, toolDirs[tool]!.appendingPathComponent(name))
+            }
+            // Symlinks into some other store (e.g. `npx skills` installs into
+            // ~/.agents/skills, then links tool dirs there): the target is a
+            // skill folder too, and absorbing it is what lets repair relink.
+            for (name, dest) in scan.foreignLinks {
+                let absolute = dest.hasPrefix("/")
+                    ? dest : toolDirs[tool]!.appendingPathComponent(dest).path
+                consider(name, URL(fileURLWithPath: absolute).resolvingSymlinksInPath())
             }
         }
         // Anything already canonical with identical content isn't "external".

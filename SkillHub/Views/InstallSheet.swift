@@ -105,7 +105,7 @@ struct InstallSheet: View {
         }
         .padding(20)
         .frame(width: 540)
-        .overlay { if busy { ProgressView() } }
+        .overlay { if busy { ProgressView().controlSize(.large) } }
     }
 
     private func discover() {
@@ -138,24 +138,19 @@ struct InstallSheet: View {
         guard let repo else { return }
         let selection = found.filter { picked.contains($0.name) }
         busy = true
-        Task.detached {
+        statusText = "Cloning \(repo)…"
+        failed = false
+        Task {
             do {
-                let result = try await MainActor.run {
-                    try appState.installRemoteSkills(repo: repo, skills: selection)
-                }
-                await MainActor.run {
-                    busy = false
-                    failed = false
-                    statusText = "Installed \(result.installed.count)"
-                        + (result.skipped.isEmpty ? "." : " — skipped existing: \(result.skipped.joined(separator: ", "))")
-                    picked = []
-                }
+                let result = try await appState.installRemoteSkills(repo: repo, skills: selection)
+                busy = false
+                statusText = "Installed \(result.installed.count)"
+                    + (result.skipped.isEmpty ? "." : " — skipped existing: \(result.skipped.joined(separator: ", "))")
+                picked = []
             } catch {
-                await MainActor.run {
-                    busy = false
-                    failed = true
-                    statusText = error.localizedDescription
-                }
+                busy = false
+                failed = true
+                statusText = error.localizedDescription
             }
         }
     }

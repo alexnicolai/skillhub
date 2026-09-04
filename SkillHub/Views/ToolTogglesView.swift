@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Per-tool enable/disable pills for one skill (creates/removes symlinks).
-/// Pills over checkboxes: state reads at a glance via the tool's accent color.
+/// Monochrome: a filled pill with the tool's logo means linked, a dashed
+/// outline means "click to add" — no per-tool colors competing for attention.
 struct ToolTogglesView: View {
     @Environment(AppState.self) private var appState
     let skill: Skill
@@ -31,21 +32,28 @@ struct ToolTogglesView: View {
             Button {
                 action(!isOn)
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 10, weight: .semibold))
+                HStack(spacing: 5) {
+                    ToolLogo(tool: tool, size: 11)
                     Text(tool.displayName)
                         .font(.system(size: 12, weight: .medium))
+                    Image(systemName: isOn ? "checkmark" : "plus")
+                        .font(.system(size: 8, weight: .bold))
+                        .opacity(isOn ? 0.7 : 0.5)
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4.5)
                 .background(
                     isOn
-                        ? Color.tool(tool).opacity(hovering ? 0.22 : 0.14)
-                        : Color.primary.opacity(hovering ? 0.1 : 0.05),
+                        ? Color.primary.opacity(hovering ? 0.16 : 0.1)
+                        : Color.primary.opacity(hovering ? 0.05 : 0),
                     in: Capsule()
                 )
-                .foregroundStyle(isOn ? Color.tool(tool) : .secondary)
+                .overlay(
+                    Capsule().strokeBorder(
+                        isOn ? Color.clear : Color.primary.opacity(0.18),
+                        style: StrokeStyle(lineWidth: 1, dash: isOn ? [] : [3, 2.5]))
+                )
+                .foregroundStyle(isOn ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .contentShape(Capsule())
             }
             .buttonStyle(PressableButtonStyle())

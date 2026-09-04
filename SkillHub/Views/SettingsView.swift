@@ -103,56 +103,22 @@ private struct GeneralSettingsTab: View {
 private struct ToolsSettingsTab: View {
     @Environment(AppState.self) private var appState
     @State private var githubToken: String = TokenStore.get() ?? ""
+    /// Bumped after an override changes so rows re-read Tool state.
+    @State private var generation = 0
 
     var body: some View {
         Form {
             Section {
                 ForEach(Tool.allCases) { tool in
-                    HStack {
-                        Label {
-                            Text(tool.displayName)
-                        } icon: {
-                            Circle()
-                                .fill(tool.isInstalled ? Color.tool(tool) : Color.secondary.opacity(0.3))
-                                .frame(width: 8, height: 8)
-                        }
-                        Spacer()
-                        if tool.isInstalled {
-                            let linked = appState.skills.filter { $0.liveTools.contains(tool) }.count
-                            Text("\(linked) of \(appState.skills.count) linked")
-                                .font(AppText.secondary)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                            if linked < appState.skills.count {
-                                Button("Link All") { appState.enableAll(for: tool) }
-                                    .controlSize(.small)
-                                    .help("Symlink every skill in the library into \(tool.displayName)")
-                            }
-                        } else {
-                            Text("Not detected")
-                                .font(AppText.secondary)
-                                .foregroundStyle(.tertiary)
-                        }
+                    ToolSettingRow(tool: tool, generation: generation) {
+                        generation += 1
+                        appState.reload()
                     }
                 }
             } header: {
-                Text("Detected tools")
+                Text("Tools")
             } footer: {
-                Text("Tools appear automatically when their app or command-line binary is found. Undetected tools stay hidden throughout the app; install one and it shows up on the next launch.")
-            }
-
-            Section {
-                ForEach(Tool.active) { tool in
-                    Picker(tool.displayName, selection: linkModeBinding(for: tool)) {
-                        Text("Symlink").tag(LinkMode.symlink)
-                        Text("Copy").tag(LinkMode.copy)
-                    }
-                    .pickerStyle(.segmented)
-                }
-            } header: {
-                Text("Link mode")
-            } footer: {
-                Text("A symlink is a shortcut: the tool's skill folder points at the store, so edits appear everywhere instantly and nothing can drift. Copy places a real duplicate that gets re-synced by checksum. Keep Symlink unless a tool can't read through them.")
+                Text("Detected tools are on by default. Turn one on manually if it lives somewhere unusual, or off if you don't want it linked. Every tool reads the same skill folders through symlinks.")
             }
 
             Section {
@@ -179,18 +145,66 @@ private struct ToolsSettingsTab: View {
         }
         .formStyle(.grouped)
     }
+}
 
-    private func linkModeBinding(for tool: Tool) -> Binding<LinkMode> {
+/// One tool: on/off switch, what it covers, detection state, coverage.
+private struct ToolSettingRow: View {
+    @Environment(AppState.self) private var appState
+    let tool: Tool
+    let generation: Int
+    var onChange: () -> Void
+
+    private var isOn: Binding<Bool> {
         Binding(
-            get: { appState.manifest.linkMode(for: tool) },
-            set: { mode in
-                var settings = appState.manifest.toolSettings ?? [:]
-                settings[tool.rawValue] = ToolSettings(linkMode: mode)
-                appState.manifest.toolSettings = settings
-                try? ManifestIO.save(appState.manifest)
-                appState.reload()
+            get: { _ = generation; return tool.isActive },
+            set: { wanted in
+                // Back to "follow detection" whenever the choice matches it.
+                tool.override = wanted == tool.isDetected ? nil : wanted
+                onChange()
             }
         )
+    }
+
+    private var detection: String {
+        _ = generation
+        switch (tool.isDetected, tool.override) {
+        case (true, nil): return "Detected"
+        case (false, nil): return "Not detected"
+        case (_, .some(true)): return tool.isDetected ? "Detected · forced on" : "Not detected · forced on"
+        case (_, .some(false)): return tool.isDetected ? "Detected · turned off" : "Not detected"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ToolLogo(tool: tool, size: 16)
+                .foregroundStyle(tool.isActive ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(tool.displayName)
+                Text("\(tool.subtitle) · \(detection)")
+                    .font(AppText.small)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if tool.isActive {
+                let linked = appState.linkedCount(for: tool)
+                Text("\(linked) of \(appState.skills.count)")
+                    .font(AppText.secondary)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .help("Skills currently linked into \(tool.displayName)")
+                if linked < appState.skills.count {
+                    Button("Link All") { appState.enableAll(for: tool) }
+                        .controlSize(.small)
+                        .help("Symlink every skill in the library into \(tool.displayName)")
+                }
+            }
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -202,10 +216,12 @@ private struct ShortcutsSettingsTab: View {
             Section("Keyboard shortcuts") {
                 shortcutRow("⌘K", "Go to skill (fuzzy search)")
                 shortcutRow("⌘N", "New skill")
+                shortcutRow("⌘O", "Import skill folder")
                 shortcutRow("⇧⌘I", "Install from GitHub")
+                shortcutRow("⇧⌘L", "Link every skill to every tool")
                 shortcutRow("⇧⌘G", "Git sync panel")
                 shortcutRow("⌘R", "Refresh catalog + check updates")
-                shortcutRow("⌘S", "Save (in the skill editor)")
+                shortcutRow("⌘S", "Save now (the editor also autosaves)")
                 shortcutRow("⌘,", "Settings")
             }
         }

@@ -13,6 +13,7 @@ struct SkillDetailView: View {
     @State private var diffLoading = false
     @State private var showIssues = false
     @State private var historyEntries: [GitService.HistoryEntry] = []
+    @State private var updating = false
 
     enum Tab: Int, CaseIterable {
         case preview, edit, files, info
@@ -53,7 +54,9 @@ struct SkillDetailView: View {
             ZStack {
                 switch tab {
                 case .preview: previewTab
-                case .edit: MarkdownEditorView(fileURL: skillMdURL, content: $skillMdContent)
+                case .edit: MarkdownEditorView(fileURL: skillMdURL, content: $skillMdContent) {
+                    appState.skillFileWasEdited(skill.name)
+                }
                 case .files: filesTab
                 case .info: infoTab
                 }
@@ -68,6 +71,18 @@ struct SkillDetailView: View {
             // One overflow menu instead of scattered lone icons.
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    if !Set(appState.activeTools).isSubset(of: skill.liveTools) {
+                        Button {
+                            appState.enableEverywhere([skill.name])
+                        } label: {
+                            Label("Make Available in Every Tool", systemImage: "link")
+                        }
+                    }
+                    Button {
+                        NSWorkspace.shared.open(skillMdURL)
+                    } label: {
+                        Label("Open SKILL.md in Default Editor", systemImage: "arrow.up.forward.app")
+                    }
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
                     } label: {
@@ -78,7 +93,7 @@ struct SkillDetailView: View {
                     Button(role: .destructive) {
                         confirmDelete = true
                     } label: {
-                        Label("Remove from Hub…", systemImage: "trash")
+                        Label("Remove from Library…", systemImage: "trash")
                     }
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
@@ -91,11 +106,20 @@ struct SkillDetailView: View {
         // window event.
         .task(id: skill.name) {
             let name = skill.name
-            let entries = await Task.detached {
-                GitService().history(path: "skills/\(name)", limit: 8)
+            let snapshot = skill
+            let (entries, files) = await Task.detached {
+                (GitService().history(path: "skills/\(name)", limit: 8),
+                 CatalogService.fileList(for: snapshot))
             }.value
-            if name == skill.name { historyEntries = entries }
+            if name == skill.name {
+                historyEntries = entries
+                fileList = files
+            }
         }
+        // The store changed under us (watcher, update, restore): re-read the
+        // preview unless the user is mid-edit.
+        .onChange(of: skill.contentHash) { if tab != .edit { loadContent() } }
+        .onChange(of: appState.skills) { if tab != .edit { loadContent() } }
         .sheet(isPresented: $showDiff) {
             DiffSheet(
                 title: "\(skill.name): local vs upstream",
@@ -106,7 +130,11 @@ struct SkillDetailView: View {
             }
         }
         .onAppear { loadContent() }
-        .onChange(of: skill.name) {
+        .onChange(of: skill.name) { previous, _ in
+            // Whatever was typed for the previous skill lands on disk before
+            // the binding is repopulated — the editor's own flush can't see
+            // the old URL any more by the time it runs.
+            flushUnsavedEdits(for: previous)
             loadContent()
             // Selection changes are high-frequency: swap content instantly,
             // never animate the pane on a new skill.
@@ -123,10 +151,10 @@ struct SkillDetailView: View {
             Text("This skill was modified locally after install. Updating replaces those edits (git history keeps them).")
         }
         .confirmationDialog(
-            "Remove \(skill.name) from the hub?",
+            "Remove \(skill.name) from the library?",
             isPresented: $confirmDelete
         ) {
-            Button("Remove from Hub and All Tools", role: .destructive) {
+            Button("Remove from Library and All Tools", role: .destructive) {
                 appState.deleteSkill(skill.name)
             }
             Button("Cancel", role: .cancel) {}
@@ -150,6 +178,17 @@ struct SkillDetailView: View {
         skillMdContent = (try? String(contentsOf: skillMdURL, encoding: .utf8)) ?? ""
     }
 
+    /// Persist the in-memory draft of `previousName` if it differs from disk.
+    private func flushUnsavedEdits(for previousName: String) {
+        guard tab == .edit,
+              let folder = appState.skills.first(where: { $0.name == previousName })?.folderURL else { return }
+        let url = folder.appendingPathComponent("SKILL.md")
+        let onDisk = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        guard onDisk != skillMdContent, !skillMdContent.isEmpty else { return }
+        try? SkillFileWriter.write(skillMdContent, to: url)
+        appState.skillFileWasEdited(previousName)
+    }
+
     private func loadDiff() {
         guard let entry = appState.manifest.skills[skill.name] else { return }
         diffLoading = true
@@ -165,13 +204,21 @@ struct SkillDetailView: View {
     }
 
     private func applyUpdate(override: Bool) {
-        do {
-            try appState.applyUpdate(skill.name, overrideLocalChanges: override)
-            updateError = nil
-            loadContent()
-        } catch {
-            updateError = error.localizedDescription
-            confirmOverwrite = true
+        guard !updating else { return }
+        updating = true
+        updateError = nil
+        Task {
+            do {
+                try await appState.applyUpdate(skill.name, overrideLocalChanges: override)
+                loadContent()
+            } catch is LocallyModifiedError {
+                // Only this case is a question for the user; everything else
+                // is just an error to show.
+                confirmOverwrite = true
+            } catch {
+                updateError = error.localizedDescription
+            }
+            updating = false
         }
     }
 
@@ -197,10 +244,15 @@ struct SkillDetailView: View {
                         Button {
                             applyUpdate(override: false)
                         } label: {
-                            Label("Update Skill File", systemImage: "arrow.down.circle.fill")
-                                .font(AppText.secondary.weight(.semibold))
+                            if updating {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Label("Update Skill File", systemImage: "arrow.down.circle.fill")
+                                    .font(AppText.secondary.weight(.semibold))
+                            }
                         }
                         .buttonStyle(PressableButtonStyle())
+                        .disabled(updating)
                         .help("A newer version exists in \(skill.provenance.source ?? "the upstream repo") — click to update")
                         Divider().frame(height: 12)
                         Button {
@@ -290,7 +342,20 @@ struct SkillDetailView: View {
             .padding(.top, 18)
 
             VStack(alignment: .leading, spacing: 7) {
-                groupLabel("Available in")
+                HStack(spacing: 8) {
+                    groupLabel("Available in")
+                    if !Set(appState.activeTools).isSubset(of: skill.liveTools) {
+                        Button {
+                            appState.enableEverywhere([skill.name])
+                        } label: {
+                            Text("Everywhere")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.brand)
+                        .help("Link this skill into every detected tool")
+                    }
+                }
                 ToolTogglesView(skill: skill)
             }
             .padding(.top, 14)
@@ -348,7 +413,8 @@ struct SkillDetailView: View {
                 .padding(.top, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
-                Label("Frontmatter · \(fields.count) fields", systemImage: "list.bullet.rectangle")
+                Label(fields.count == 1 ? "Frontmatter · 1 field" : "Frontmatter · \(fields.count) fields",
+                      systemImage: "list.bullet.rectangle")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
@@ -357,8 +423,10 @@ struct SkillDetailView: View {
         }
     }
 
+    @State private var fileList: [String] = []
+
     private var filesTab: some View {
-        List(CatalogService.fileList(for: skill), id: \.self) { rel in
+        List(fileList, id: \.self) { rel in
             FileRow(rel: rel, icon: iconForFile(rel), folderURL: skill.folderURL)
         }
         .scrollContentBackground(.hidden)

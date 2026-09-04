@@ -70,7 +70,7 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 bullet("square.stack.3d.up", "One store, every tool",
-                       "Claude Code, Cursor, Codex, OpenCode, Gemini CLI, and Kiro all read the same skill folders via symlinks.")
+                       "Claude Code, Cursor, Codex (and the ChatGPT app), Grok, OpenCode, Gemini CLI, and Kiro all read the same skill folders via symlinks.")
                 bullet("arrow.down.circle", "Updates & provenance",
                        "See where each skill came from and pull upstream updates with one click.")
                 bullet("antenna.radiowaves.left.and.right", "A catalog agents can query",
@@ -148,7 +148,13 @@ struct OnboardingView: View {
             let detected = Tool.active
             HStack(spacing: 6) {
                 ForEach(detected) { tool in
-                    Badge(text: tool.displayName, systemImage: "checkmark", color: .tool(tool))
+                    HStack(spacing: 5) {
+                        ToolLogo(tool: tool, size: 11)
+                        Text(tool.displayName).font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.08), in: Capsule())
                 }
             }
 
@@ -195,7 +201,7 @@ struct OnboardingView: View {
                 bullet("arrow.triangle.branch", "Sync across machines",
                        "Add a GitHub remote in the Git panel (⇧⌘G), then clone + adopt on other Macs.")
                 bullet("gearshape", "Settings",
-                       "GitHub token for update checks, per-tool link modes, launch at login.")
+                       "Turn tools on or off, add a GitHub token for update checks, launch at login.")
             }
             .frame(maxWidth: 420, alignment: .leading)
         }

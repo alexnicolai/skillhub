@@ -61,12 +61,24 @@ struct BulkActionsView: View {
             }
             .frame(maxWidth: 480)
 
-            Button(role: .destructive) {
-                onRemove()
-            } label: {
-                Label("Remove \(names.count) Skills from Hub…", systemImage: "trash")
+            HStack(spacing: 10) {
+                let gaps = selected.filter { !Set(appState.activeTools).isSubset(of: $0.liveTools) }.count
+                if gaps > 0 {
+                    Button {
+                        appState.enableEverywhere(names)
+                    } label: {
+                        Label("Make Available in Every Tool", systemImage: "link")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help("\(gaps) of these are missing from at least one tool")
+                }
+                Button(role: .destructive) {
+                    onRemove()
+                } label: {
+                    Label("Remove \(names.count) Skills…", systemImage: "trash")
+                }
+                .help("Unlinks them from every tool and deletes them from the store (git history keeps copies)")
             }
-            .help("Unlinks them from every tool and deletes them from the store (git history keeps copies)")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()

@@ -13,9 +13,13 @@ enum CLI {
               status            catalog + per-tool summary
               adopt --dry-run   preview migration + conversion steps
               adopt             migrate repo, import external skills, convert tools
-              adopt --tool=X    convert only tool X (claude|cursor|codex|opencode|gemini|kiro)
+              adopt --tool=X    convert only tool X (claude|cursor|codex|opencode|gemini|kiro|grok)
               verify            post-conversion checks for every tool
               drift             list drift between manifest intent and disk
+              usage             per-skill usage counts from Claude Code transcripts
+              updates [--force] check GitHub-sourced skills for upstream changes
+              update <name>     apply one upstream update
+              serve             headless API server
             """)
             return 0
 
@@ -118,6 +122,7 @@ enum CLI {
                 manifest: { (try? ManifestIO.load()) ?? .empty() },
                 usage: { scanner.loadCache().aggregated() },
                 skillsDir: { AppPaths.skillsDir },
+                skills: { CatalogService.loadCatalog(manifest: (try? ManifestIO.load()) ?? .empty()) },
                 recordUsage: { skill, tool in
                     var cache = scanner.loadCache()
                     let key = "external://\(tool)"

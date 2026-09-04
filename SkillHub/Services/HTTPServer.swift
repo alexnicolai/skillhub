@@ -16,6 +16,9 @@ final class HTTPServer: @unchecked Sendable {
         var manifest: () -> Manifest
         var usage: () -> [String: UsageCache.SkillHit]
         var skillsDir: () -> URL
+        /// Live catalog (frontmatter read from disk) so descriptions edited in
+        /// the app are served immediately, not the manifest's snapshot.
+        var skills: () -> [Skill] = { [] }
         var recordUsage: (String, String) -> Void   // (skill, tool)
         /// Called after an agent submission lands in the inbox (UI refresh).
         var inboxChanged: () -> Void = {}
@@ -81,21 +84,69 @@ final class HTTPServer: @unchecked Sendable {
         receiveRequest(connection, buffer: Data())
     }
 
-    private func receiveRequest(_ connection: NWConnection, buffer: Data) {
+    /// Parsed HTTP/1.1 request head. Body completeness is judged by
+    /// Content-Length so a POST whose body lands in a later TCP segment
+    /// (or after an `Expect: 100-continue` handshake) is still honored.
+    struct Request {
+        var method: String
+        var path: String
+        var headers: [String: String]   // lowercased names
+        var body: Data
+        var contentLength: Int { Int(headers["content-length"] ?? "") ?? 0 }
+        var expectsContinue: Bool { headers["expect"]?.lowercased() == "100-continue" }
+        var isComplete: Bool { body.count >= contentLength }
+
+        /// nil until the header block ("\r\n\r\n") has arrived.
+        static func parse(_ buffer: Data) -> Request? {
+            guard let headerEnd = buffer.range(of: Data("\r\n\r\n".utf8)) else { return nil }
+            let head = String(decoding: buffer[..<headerEnd.lowerBound], as: UTF8.self)
+            let lines = head.components(separatedBy: "\r\n")
+            let parts = (lines.first ?? "").split(separator: " ")
+            var headers: [String: String] = [:]
+            for line in lines.dropFirst() {
+                guard let colon = line.firstIndex(of: ":") else { continue }
+                let name = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+                headers[name] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            }
+            return Request(
+                method: parts.count > 0 ? String(parts[0]) : "",
+                path: parts.count > 1 ? String(parts[1]) : "",
+                headers: headers,
+                body: Data(buffer[headerEnd.upperBound...])
+            )
+        }
+    }
+
+    private static let maxBodyBytes = 4 * 1024 * 1024
+
+    private func receiveRequest(_ connection: NWConnection, buffer: Data, continued: Bool = false) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
             var buffer = buffer
             if let data { buffer.append(data) }
             if error != nil { connection.cancel(); return }
 
-            // We only accept header-only requests or small POST bodies.
-            if let headerEnd = buffer.range(of: Data("\r\n\r\n".utf8)) {
-                let response = self.route(rawRequest: buffer, headerEnd: headerEnd)
-                self.send(response, on: connection)
-            } else if isComplete || buffer.count > 256 * 1024 {
+            guard let request = Request.parse(buffer) else {
+                if isComplete || buffer.count > 64 * 1024 { connection.cancel() }
+                else { self.receiveRequest(connection, buffer: buffer, continued: continued) }
+                return
+            }
+            if request.contentLength > HTTPServer.maxBodyBytes {
+                self.send(self.httpResponse(413, json: ["error": "body too large"]), on: connection)
+                return
+            }
+            if request.isComplete {
+                self.send(self.route(request), on: connection)
+            } else if isComplete {
                 connection.cancel()
             } else {
-                self.receiveRequest(connection, buffer: buffer)
+                // curl sends `Expect: 100-continue` for larger bodies and waits
+                // for our go-ahead before transmitting them.
+                if request.expectsContinue && !continued {
+                    connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8),
+                                    completion: .contentProcessed { _ in })
+                }
+                self.receiveRequest(connection, buffer: buffer, continued: true)
             }
         }
     }
@@ -108,27 +159,21 @@ final class HTTPServer: @unchecked Sendable {
 
     // MARK: - Routing
 
-    private func route(rawRequest: Data, headerEnd: Range<Data.Index>) -> Data {
-        let head = String(data: rawRequest[..<headerEnd.lowerBound], encoding: .utf8) ?? ""
-
+    private func route(_ request: Request) -> Data {
         // DNS-rebinding guard: a hostile site whose DNS resolves to 127.0.0.1
         // becomes same-origin with this server. Only honest local Hosts pass;
         // a missing Host header is rejected too (HTTP/1.1 requires one).
-        let hostLine = head.components(separatedBy: "\r\n")
-            .first { $0.lowercased().hasPrefix("host:") }
-        let host = hostLine?.dropFirst(5)
-            .trimmingCharacters(in: .whitespaces)
+        let host = request.headers["host"]?
             .split(separator: ":").first.map(String.init)?.lowercased()
         guard host == "127.0.0.1" || host == "localhost" || host == "[::1]" else {
             return httpResponse(403, json: ["error": "forbidden host"])
         }
 
-        let requestLine = head.components(separatedBy: "\r\n").first ?? ""
-        let parts = requestLine.split(separator: " ")
-        guard parts.count >= 2 else { return httpResponse(400, json: ["error": "bad request"]) }
-        let method = String(parts[0])
-        let fullPath = String(parts[1])
-        let path = fullPath.split(separator: "?").first.map(String.init) ?? fullPath
+        guard !request.method.isEmpty, !request.path.isEmpty else {
+            return httpResponse(400, json: ["error": "bad request"])
+        }
+        let method = request.method
+        let path = request.path.split(separator: "?").first.map(String.init) ?? request.path
         let segments = path.split(separator: "/").map(String.init)
 
         switch (method, segments.first, segments.count) {
@@ -159,8 +204,7 @@ final class HTTPServer: @unchecked Sendable {
             return httpResponse(200, json: payload)
 
         case ("POST", .some("events"), 2) where segments[1] == "skill-used":
-            let body = rawRequest[headerEnd.upperBound...]
-            if let parsed = try? JSONSerialization.jsonObject(with: Data(body)) as? [String: Any],
+            if let parsed = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
                let skill = parsed["skill"] as? String {
                 providers.recordUsage(skill, parsed["tool"] as? String ?? "unknown")
                 return httpResponse(204, json: nil)
@@ -170,8 +214,7 @@ final class HTTPServer: @unchecked Sendable {
         case ("POST", .some("skills"), 1):
             // Agents can PROPOSE skills — they land in the review inbox, never
             // directly in the store.
-            let body = rawRequest[headerEnd.upperBound...]
-            guard let parsed = try? JSONSerialization.jsonObject(with: Data(body)) as? [String: Any],
+            guard let parsed = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
                   let name = parsed["name"] as? String,
                   let skillMd = parsed["skillMd"] as? String else {
                 return httpResponse(400, json: ["error": "expected {\"name\": ..., \"skillMd\": ..., \"tool\"?: ...}"])
@@ -198,19 +241,27 @@ final class HTTPServer: @unchecked Sendable {
         }
     }
 
+    /// Descriptions as currently on disk; falls back to the manifest snapshot.
+    private func liveDescriptions() -> [String: (description: String, short: String?)] {
+        Dictionary(uniqueKeysWithValues: providers.skills().map {
+            ($0.name, ($0.description, $0.shortDescription))
+        })
+    }
+
     private func listSkills() -> Data {
         let manifest = providers.manifest()
         let usage = providers.usage()
+        let live = liveDescriptions()
         let skills = manifest.skills.sorted { $0.key < $1.key }.map { name, entry -> [String: Any] in
             var out: [String: Any] = [
                 "name": name,
-                "description": entry.description,
+                "description": live[name]?.description ?? entry.description,
                 "tools": Tool.allCases.filter { entry.isEnabled(for: $0) }.map(\.rawValue),
                 "source": ["type": entry.source.sourceType.rawValue,
                            "repo": entry.source.source as Any],
                 "usageCount": usage[name]?.count ?? 0,
             ]
-            if let short = entry.shortDescription { out["shortDescription"] = short }
+            if let short = live[name]?.short ?? entry.shortDescription { out["shortDescription"] = short }
             if let tags = entry.tags, !tags.isEmpty { out["tags"] = tags }
             if let updated = entry.source.updatedAt {
                 out["updatedAt"] = ISO8601DateFormatter().string(from: updated)
@@ -229,10 +280,11 @@ final class HTTPServer: @unchecked Sendable {
         let folder = providers.skillsDir().appendingPathComponent(name)
         let skillMd = (try? String(contentsOf: folder.appendingPathComponent("SKILL.md"), encoding: .utf8)) ?? ""
         let files = (try? HashService.fileHashes(folder).keys.sorted()) ?? []
+        let fm = FrontmatterParser.parse(skillMd)
         return httpResponse(200, json: [
             "name": name,
-            "description": entry.description,
-            "shortDescription": entry.shortDescription as Any,
+            "description": fm.description ?? entry.description,
+            "shortDescription": (fm.shortDescription ?? entry.shortDescription) as Any,
             "tools": Tool.allCases.filter { entry.isEnabled(for: $0) }.map(\.rawValue),
             "source": [
                 "type": entry.source.sourceType.rawValue,
@@ -263,7 +315,10 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     private func httpResponse(_ status: Int, json: Any?) -> Data {
-        let statusText: [Int: String] = [200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found"]
+        let statusText: [Int: String] = [
+            200: "OK", 204: "No Content", 400: "Bad Request", 403: "Forbidden",
+            404: "Not Found", 409: "Conflict", 413: "Payload Too Large", 500: "Internal Server Error",
+        ]
         var body = Data()
         if let json, let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) {
             body = data

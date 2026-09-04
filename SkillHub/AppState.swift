@@ -1,15 +1,33 @@
 import Foundation
 import Observation
 
-/// Sidebar scopes: library views, smart groups, review queues, or one tag.
+/// Sidebar scopes: library views, smart groups, review queues, one tool, or one tag.
 enum SidebarItem: Hashable {
     case all
     case updates
     case issues
+    case gaps        // skills missing from at least one active tool
     case unused
     case conflicts
     case inbox
+    case tool(Tool)  // skills a given tool currently has
     case tag(String)
+}
+
+/// Transient user-facing message shown as a banner in the main window.
+struct Notice: Equatable, Identifiable {
+    enum Kind { case info, success, error }
+    let id = UUID()
+    let kind: Kind
+    let text: String
+}
+
+/// Thrown by applyUpdate when the local folder was edited after install.
+struct LocallyModifiedError: LocalizedError {
+    let name: String
+    var errorDescription: String? {
+        "\(name) has local modifications — updating would overwrite them."
+    }
 }
 
 /// Root observable state for the app.
@@ -21,11 +39,35 @@ final class AppState {
     var drift: [DriftItem] = []
     var isMigrated: Bool = false
     var loadError: String?
+    var notice: Notice?
     var searchText: String = ""
     var selectedSkillNames: Set<String> = []
     var sidebarSelection: SidebarItem = .all
     var usage: [String: UsageCache.SkillHit] = [:]
     var updateAvailable: Set<String> = []
+    /// Detected (or force-enabled) tools, refreshed on every reload so views
+    /// never hit the filesystem to answer "which tools exist?".
+    var activeTools: [Tool] = Tool.active
+
+    // Sheet triggers, kept here so menu commands and toolbar share them.
+    var showNewSkill = false
+    var showInstall = false
+    var showImport = false
+    var showQuickOpen = false
+    var showGitPanel = false
+
+    // MARK: - Notices
+
+    func notify(_ kind: Notice.Kind, _ text: String) {
+        notice = Notice(kind: kind, text: text)
+        if kind != .error {
+            let id = notice?.id
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(4))
+                if notice?.id == id { notice = nil }
+            }
+        }
+    }
 
     // MARK: - Tags
 
@@ -65,19 +107,63 @@ final class AppState {
         persistManifest()
     }
 
-    /// Link every skill in the library into one tool (Settings → Link All).
+    // MARK: - Coverage (which tools have which skills)
+
+    /// Skills missing from at least one active tool.
+    var gapSkills: [Skill] {
+        let wanted = Set(activeTools)
+        return skills.filter { !wanted.isSubset(of: $0.liveTools) }
+    }
+
+    func linkedCount(for tool: Tool) -> Int {
+        skills.filter { $0.liveTools.contains(tool) }.count
+    }
+
+    /// Link every skill in the library into one tool (sidebar / Settings).
     func enableAll(for tool: Tool) {
+        link(skills.map(\.name), to: [tool], label: "\(tool.displayName) now has every skill")
+    }
+
+    /// Link the given skills into every active tool.
+    func enableEverywhere(_ names: some Collection<String>) {
+        let label = names.count == 1
+            ? "\(names.first ?? "") is now available in every tool"
+            : "\(names.count) skills are now available in every tool"
+        link(Array(names), to: activeTools, label: label)
+    }
+
+    /// One click to close every gap: every skill into every active tool.
+    func linkEverythingEverywhere() {
+        link(gapSkills.map(\.name), to: activeTools, label: "Every skill is now available in every tool")
+    }
+
+    private func link(_ names: [String], to tools: [Tool], label: String) {
+        var linked = 0
+        var failures: [String] = []
         do {
             try withSuppressedWatcher {
-                for skill in skills where !skill.liveTools.contains(tool) {
-                    try engine.enable(skill: skill.name, for: tool)
-                    manifest.skills[skill.name]?.tools[tool.rawValue] = true
+                for name in names {
+                    guard let skill = skills.first(where: { $0.name == name }) else { continue }
+                    for tool in tools where !skill.liveTools.contains(tool) {
+                        do {
+                            try engine.enable(skill: name, for: tool)
+                            manifest.skills[name]?.tools[tool.rawValue] = true
+                            linked += 1
+                        } catch {
+                            failures.append("\(name) → \(tool.displayName)")
+                        }
+                    }
                 }
                 try ManifestIO.save(manifest)
             }
-            loadError = nil
+            if !failures.isEmpty {
+                notify(.error, "Couldn't link: \(failures.prefix(4).joined(separator: ", "))"
+                       + (failures.count > 4 ? " and \(failures.count - 4) more" : ""))
+            } else if linked > 0 {
+                notify(.success, label)
+            }
         } catch {
-            loadError = "Link all failed: \(error.localizedDescription)"
+            notify(.error, "Linking failed: \(error.localizedDescription)")
         }
         reload()
     }
@@ -95,36 +181,43 @@ final class AppState {
         persistManifest()
     }
 
-    /// Remove several skills in one pass (single git commit).
+    /// Remove one or more skills in one pass (single git commit).
     func deleteSkills(_ names: some Collection<String>) {
         var kept: [String] = []
+        let list = Array(names)
         do {
             try withSuppressedWatcher {
-                for name in names {
+                for name in list {
                     let report = try engine.removeSkill(name)
                     manifest.skills[name] = nil
                     kept.append(contentsOf: report.divergentLeft.map { "\(name) (\($0.displayName))" })
                 }
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
-                    paths: ["skills", "skillhub.json"],
-                    message: "\(Brand.commitPrefix): remove \(names.count) skills")
+                    paths: list.map { "skills/\($0)" } + ["skillhub.json"],
+                    message: list.count == 1
+                        ? "\(Brand.commitPrefix): remove \(list[0])"
+                        : "\(Brand.commitPrefix): remove \(list.count) skills")
             }
-            loadError = kept.isEmpty ? nil
-                : "Kept locally-modified copies: \(kept.joined(separator: ", "))"
+            if kept.isEmpty {
+                notify(.success, list.count == 1 ? "Removed \(list[0])" : "Removed \(list.count) skills")
+            } else {
+                notify(.info, "Removed. Kept locally-modified copies: \(kept.joined(separator: ", "))")
+            }
         } catch {
-            loadError = "Remove failed: \(error.localizedDescription)"
+            notify(.error, "Remove failed: \(error.localizedDescription)")
         }
         selectedSkillNames.subtract(names)
         reload()
     }
 
+    func deleteSkill(_ name: String) { deleteSkills([name]) }
+
     private func persistManifest() {
         do {
             try withSuppressedWatcher { try ManifestIO.save(manifest) }
-            loadError = nil
         } catch {
-            loadError = "Saving tags failed: \(error.localizedDescription)"
+            notify(.error, "Saving skillhub.json failed: \(error.localizedDescription)")
         }
         reload()
     }
@@ -170,6 +263,11 @@ final class AppState {
         return try work()
     }
 
+    /// Long-running background writes (clones) need a longer quiet window.
+    func suppressWatcher(for seconds: TimeInterval) {
+        watcher?.suppress(for: seconds)
+    }
+
     /// Skills within the selected sidebar scope, then narrowed by search.
     var filteredSkills: [Skill] {
         var scoped: [Skill]
@@ -177,8 +275,10 @@ final class AppState {
         case .all: scoped = skills
         case .updates: scoped = skills.filter(\.updateAvailable)
         case .issues: scoped = skills.filter { !$0.issues.isEmpty }
+        case .gaps: scoped = gapSkills
         case .unused: scoped = skills.filter { $0.usageCount == 0 }
         case .conflicts, .inbox: scoped = []   // these scopes show their own lists
+        case .tool(let tool): scoped = skills.filter { $0.liveTools.contains(tool) }
         case .tag(let tag): scoped = skills.filter { $0.tags.contains(tag) }
         }
         guard !searchText.isEmpty else { return scoped }
@@ -198,6 +298,7 @@ final class AppState {
 
     func reload() {
         isMigrated = CatalogService.isMigrated
+        activeTools = Tool.active
         do {
             manifest = try ManifestIO.load()
             loadError = nil
@@ -212,9 +313,22 @@ final class AppState {
             usage: usage,
             updateAvailable: updateAvailable
         )
-        drift = isMigrated ? engine.detectDrift(manifest: manifest) : []
+        // Drift is only actionable for tools in use; the CLI still reports all.
+        let active = Set(activeTools)
+        drift = isMigrated
+            ? engine.detectDrift(manifest: manifest).filter { active.contains($0.tool) }
+            : []
         conflicts = ConflictsService.list(store: AppPaths.skillsDir)
         inbox = InboxService.list()
+        // Never leave the sidebar on a scope that no longer exists.
+        switch sidebarSelection {
+        case .tool(let tool) where !active.contains(tool): sidebarSelection = .all
+        case .tag(let tag) where !allTags.contains(where: { $0.tag == tag }): sidebarSelection = .all
+        case .updates where updateAvailable.isEmpty: sidebarSelection = .all
+        case .conflicts where conflicts.isEmpty: sidebarSelection = .all
+        case .inbox where inbox.isEmpty: sidebarSelection = .all
+        default: break
+        }
     }
 
     // MARK: - HTTP server
@@ -233,11 +347,17 @@ final class AppState {
                 DispatchQueue.main.sync { self?.usage ?? [:] }
             },
             skillsDir: { AppPaths.skillsDir },
+            skills: { [weak self] in
+                DispatchQueue.main.sync { self?.skills ?? [] }
+            },
             recordUsage: { [weak self] skill, tool in
                 DispatchQueue.main.async { self?.recordExternalUsage(skill: skill, tool: tool) }
             },
             inboxChanged: { [weak self] in
-                DispatchQueue.main.async { self?.reload() }
+                DispatchQueue.main.async {
+                    self?.reload()
+                    self?.notify(.info, "An agent proposed a new skill — review it in the Inbox")
+                }
             }
         ))
         do {
@@ -275,11 +395,10 @@ final class AppState {
         reload()
     }
 
-    // MARK: - Review queues + quick open
+    // MARK: - Review queues
 
     var conflicts: [ConflictsService.Conflict] = []
     var inbox: [InboxService.Submission] = []
-    var showQuickOpen = false
     var issueCount: Int { skills.filter { !$0.issues.isEmpty }.count }
     var unusedCount: Int { skills.filter { $0.usageCount == 0 }.count }
 
@@ -304,9 +423,9 @@ final class AppState {
                         message: "\(Brand.commitPrefix): resolve conflict \(conflict.entryName) (keep mine)")
                 }
             }
-            loadError = nil
+            notify(.success, "Resolved \(conflict.skillName)")
         } catch {
-            loadError = "Conflict resolution failed: \(error.localizedDescription)"
+            notify(.error, "Conflict resolution failed: \(error.localizedDescription)")
         }
         reload()
     }
@@ -326,7 +445,7 @@ final class AppState {
                     tools: [:],
                     addedAt: Date()
                 )
-                for tool in Tool.active {
+                for tool in activeTools {
                     try? engine.enable(skill: submission.name, for: tool)
                     manifest.skills[submission.name]?.tools[tool.rawValue] = true
                 }
@@ -335,9 +454,9 @@ final class AppState {
                     paths: ["skills/\(submission.name)", "skillhub.json"],
                     message: "\(Brand.commitPrefix): approve agent-submitted skill \(submission.name)")
             }
-            loadError = nil
+            notify(.success, "Approved \(submission.name) — now available in every tool")
         } catch {
-            loadError = "Approve failed: \(error.localizedDescription)"
+            notify(.error, "Approve failed: \(error.localizedDescription)")
         }
         reload()
     }
@@ -347,7 +466,7 @@ final class AppState {
         reload()
     }
 
-    // MARK: - Create / install / restore
+    // MARK: - Create / install / import / restore
 
     func createSkill(name: String, description: String, tags: [String], tools: Set<Tool>) throws {
         try withSuppressedWatcher {
@@ -373,10 +492,14 @@ final class AppState {
         selectedSkillNames = [name]
     }
 
-    func installRemoteSkills(repo: String, skills selection: [RepoBrowser.RemoteSkill]) throws -> RepoBrowser.InstallResult {
-        let result = try withSuppressedWatcher {
-            let result = try RepoBrowser().install(
-                repo: repo, skills: selection, into: AppPaths.skillsDir)
+    /// Clone happens off the main thread; manifest bookkeeping happens here.
+    func installRemoteSkills(repo: String, skills selection: [RepoBrowser.RemoteSkill]) async throws -> RepoBrowser.InstallResult {
+        suppressWatcher(for: 120)
+        let store = AppPaths.skillsDir
+        let result = try await Task.detached(priority: .userInitiated) {
+            try RepoBrowser().install(repo: repo, skills: selection, into: store)
+        }.value
+        try withSuppressedWatcher {
             for skill in selection where result.installed.contains(skill.name) {
                 let folder = engine.canonicalFolder(skill.name)
                 let fm = FrontmatterParser.parse(fileURL: folder.appendingPathComponent("SKILL.md"))
@@ -388,7 +511,7 @@ final class AppState {
                     tools: [:],
                     addedAt: Date()
                 )
-                for tool in Tool.active {
+                for tool in activeTools {
                     try? engine.enable(skill: skill.name, for: tool)
                     manifest.skills[skill.name]?.tools[tool.rawValue] = true
                 }
@@ -396,13 +519,106 @@ final class AppState {
             if !result.installed.isEmpty {
                 try ManifestIO.save(manifest)
                 try? GitService().commit(
-                    paths: ["skills", "skillhub.json"],
+                    paths: result.installed.map { "skills/\($0)" } + ["skillhub.json"],
                     message: "\(Brand.commitPrefix): install \(result.installed.count) skills from \(repo)")
             }
-            return result
         }
         reload()
+        if !result.installed.isEmpty {
+            notify(.success, result.installed.count == 1
+                ? "Installed \(result.installed[0]) into every tool"
+                : "Installed \(result.installed.count) skills into every tool")
+        }
         return result
+    }
+
+    struct ImportResult {
+        var imported: [String] = []
+        var replaced: [String] = []
+        var skipped: [(name: String, reason: String)] = []
+    }
+
+    /// Bring local skill folders (or SKILL.md files) into the store. Each
+    /// becomes a canonical skill linked into every active tool. Existing
+    /// names are replaced only when `replaceExisting` — the old version stays
+    /// in git history either way.
+    func importLocalSkills(_ urls: [URL], replaceExisting: Bool) -> ImportResult {
+        var result = ImportResult()
+        let fm = FileManager.default
+        let store = AppPaths.skillsDir.resolvingSymlinksInPath()
+        do {
+            try withSuppressedWatcher {
+                for raw in urls {
+                    var source = raw.resolvingSymlinksInPath()
+                    if source.lastPathComponent == "SKILL.md" { source = source.deletingLastPathComponent() }
+                    guard fm.fileExists(atPath: source.appendingPathComponent("SKILL.md").path) else {
+                        result.skipped.append((raw.lastPathComponent, "no SKILL.md inside"))
+                        continue
+                    }
+                    if source.path.hasPrefix(store.path + "/") {
+                        result.skipped.append((source.lastPathComponent, "already in the store"))
+                        continue
+                    }
+                    let fmData = FrontmatterParser.parse(fileURL: source.appendingPathComponent("SKILL.md"))
+                    let name = source.lastPathComponent
+                    if let problem = SkillScaffold.validateName(name) {
+                        result.skipped.append((name, problem))
+                        continue
+                    }
+                    let dest = engine.canonicalFolder(name)
+                    let exists = fm.fileExists(atPath: dest.path)
+                    if exists && !replaceExisting {
+                        result.skipped.append((name, "already exists"))
+                        continue
+                    }
+                    if exists { try fm.removeItem(at: dest) }
+                    try fm.copyItem(at: source, to: dest)
+                    try? fm.removeItem(at: dest.appendingPathComponent(".DS_Store"))
+                    let previous = manifest.skills[name]
+                    manifest.skills[name] = ManifestSkill(
+                        description: fmData.description ?? previous?.description ?? "",
+                        shortDescription: fmData.shortDescription,
+                        contentHash: (try? HashService.hashFolder(dest)) ?? "",
+                        source: previous?.source ?? Provenance(
+                            sourceType: .local, source: "import:\(raw.path)", installedAt: Date()),
+                        tools: previous?.tools ?? [:],
+                        tags: previous?.tags,
+                        addedAt: previous?.addedAt ?? Date()
+                    )
+                    for tool in activeTools {
+                        try? engine.enable(skill: name, for: tool)
+                        manifest.skills[name]?.tools[tool.rawValue] = true
+                    }
+                    if exists { result.replaced.append(name) } else { result.imported.append(name) }
+                }
+                let touched = result.imported + result.replaced
+                if !touched.isEmpty {
+                    try ManifestIO.save(manifest)
+                    try? GitService().commit(
+                        paths: touched.map { "skills/\($0)" } + ["skillhub.json"],
+                        message: "\(Brand.commitPrefix): import \(touched.count) skills from local folders")
+                }
+            }
+        } catch {
+            notify(.error, "Import failed: \(error.localizedDescription)")
+        }
+        reload()
+        let touched = result.imported + result.replaced
+        if let last = touched.last {
+            sidebarSelection = .all
+            selectedSkillNames = [last]
+            notify(.success, touched.count == 1
+                ? "Imported \(last) into every tool"
+                : "Imported \(touched.count) skills into every tool")
+        }
+        return result
+    }
+
+    /// The raw editor saved a SKILL.md: keep the watcher quiet and refresh the
+    /// catalog so descriptions, doctor findings, and the API stay current.
+    func skillFileWasEdited(_ name: String) {
+        watcher?.suppress()
+        reload()
     }
 
     func restoreSkill(_ name: String, to sha: String) {
@@ -415,36 +631,9 @@ final class AppState {
                     try ManifestIO.save(manifest)
                 }
             }
-            loadError = nil
+            notify(.success, "Restored \(name) to \(String(sha.prefix(7)))")
         } catch {
-            loadError = "Restore failed: \(error.localizedDescription)"
-        }
-        reload()
-    }
-
-    // MARK: - Skill removal
-
-    /// Remove a skill from the hub and from every tool using it.
-    /// Divergent tool-local copies survive; the canonical version stays in git history.
-    func deleteSkill(_ name: String) {
-        do {
-            try withSuppressedWatcher {
-                let report = try engine.removeSkill(name)
-                manifest.skills[name] = nil
-                try ManifestIO.save(manifest)
-                try? GitService().commit(
-                    paths: ["skills/\(name)", "skillhub.json"],
-                    message: "\(Brand.commitPrefix): remove \(name)")
-                if !report.divergentLeft.isEmpty {
-                    loadError = "\(name) removed. Kept locally-modified copies in: "
-                        + report.divergentLeft.map(\.displayName).joined(separator: ", ")
-                } else {
-                    loadError = nil
-                }
-            }
-            selectedSkillNames.remove(name)
-        } catch {
-            loadError = "Remove failed: \(error.localizedDescription)"
+            notify(.error, "Restore failed: \(error.localizedDescription)")
         }
         reload()
     }
@@ -454,15 +643,18 @@ final class AppState {
     /// skill name -> latest upstream tree sha, filled by checkForUpdates.
     var pendingUpdateShas: [String: String] = [:]
     var updateErrors: [String] = []
+    var checkingUpdates = false
 
     func checkForUpdates(force: Bool = false) {
         let manifest = self.manifest
+        checkingUpdates = true
         Task.detached(priority: .utility) {
             let result = await UpdateChecker().check(manifest: manifest, force: force)
             await MainActor.run {
                 self.pendingUpdateShas = result.updatesAvailable
                 self.updateAvailable = Set(result.updatesAvailable.keys)
                 self.updateErrors = result.errors
+                self.checkingUpdates = false
                 self.reload()
             }
         }
@@ -470,29 +662,30 @@ final class AppState {
 
     /// Apply one upstream update. Refuses if the local folder was edited since
     /// the manifest last recorded its hash, unless `overrideLocalChanges`.
-    func applyUpdate(_ name: String, overrideLocalChanges: Bool = false) throws {
+    /// The sparse clone runs off the main thread.
+    func applyUpdate(_ name: String, overrideLocalChanges: Bool = false) async throws {
         guard let sha = pendingUpdateShas[name],
               let entry = manifest.skills[name] else { return }
         let folder = engine.canonicalFolder(name)
         let currentHash = (try? HashService.hashFolder(folder)) ?? ""
         if !overrideLocalChanges && currentHash != entry.contentHash {
-            throw NSError(domain: "SkillHub", code: 5, userInfo: [
-                NSLocalizedDescriptionKey:
-                    "\(name) has local modifications — updating would overwrite them."
-            ])
+            throw LocallyModifiedError(name: name)
         }
-        try withSuppressedWatcher {
-            let updated = try UpdateChecker().update(
+        suppressWatcher(for: 120)
+        let updated = try await Task.detached(priority: .userInitiated) {
+            try UpdateChecker().update(
                 skillName: name, skill: entry, canonicalFolder: folder, newUpstreamSha: sha)
+        }.value
+        try withSuppressedWatcher {
             manifest.skills[name] = updated
             try ManifestIO.save(manifest)
-            let git = GitService()
-            try? git.commit(paths: ["skills/\(name)", "skillhub.json"],
-                            message: "\(Brand.commitPrefix): update \(name) from upstream")
+            try? GitService().commit(paths: ["skills/\(name)", "skillhub.json"],
+                                     message: "\(Brand.commitPrefix): update \(name) from upstream")
         }
         pendingUpdateShas[name] = nil
         updateAvailable.remove(name)
         reload()
+        notify(.success, "Updated \(name) from \(entry.source.source ?? "upstream")")
     }
 
     // MARK: - Per-tool toggles
@@ -508,31 +701,49 @@ final class AppState {
                 manifest.skills[name]?.tools[tool.rawValue] = enabled
                 try ManifestIO.save(manifest)
             }
-            loadError = nil
         } catch {
-            loadError = error.localizedDescription
+            notify(.error, error.localizedDescription)
         }
         reload()
     }
 
-    /// One-click drift repair: re-convert the affected tools (fresh backup taken).
+    /// One-click drift repair: absorb skills that only exist outside the store
+    /// (real dirs, links into other stores), then re-convert the affected
+    /// tools with a fresh backup and recreate any links the manifest wants.
     func repairDrift() {
         let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let tools = Set(drift.map(\.tool))
+        var imported: [String] = []
+        var leftover: [String] = []
         do {
             try withSuppressedWatcher {
+                let git = GitService()
+                imported = try engine.importExternalSkills(git: git)
                 for tool in tools.sorted() {
-                    _ = try engine.convertTool(tool, backupStamp: stamp)
+                    let report = try engine.convertTool(tool, backupStamp: stamp)
+                    leftover.append(contentsOf: report.issues)
                 }
-                // Recreate links the manifest wants but the dir lacks.
                 for item in drift where item.kind == .missingLink {
                     try? engine.enable(skill: item.entryName, for: item.tool)
                 }
+                let refreshed = try engine.buildManifest(existing: (try? ManifestIO.load()) ?? manifest)
+                try ManifestIO.save(refreshed)
+                try? git.commit(paths: ["skills", "skillhub.json"],
+                                message: "\(Brand.commitPrefix): repair drift"
+                                    + (imported.isEmpty ? "" : ", import \(imported.count) skills"))
             }
-            loadError = nil
+            if leftover.isEmpty {
+                notify(.success, imported.isEmpty
+                    ? "Drift repaired"
+                    : "Drift repaired — imported \(imported.count) skills into the store")
+            } else {
+                notify(.info, "Repaired what was possible. Left alone: "
+                       + leftover.prefix(3).joined(separator: "; ")
+                       + (leftover.count > 3 ? " (+\(leftover.count - 3) more)" : ""))
+            }
         } catch {
-            loadError = "Repair failed: \(error.localizedDescription)"
+            notify(.error, "Repair failed: \(error.localizedDescription)")
         }
         reload()
     }

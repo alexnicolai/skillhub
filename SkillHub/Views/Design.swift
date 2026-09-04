@@ -220,17 +220,122 @@ struct Badge: View {
 extension Color {
     /// Brand accent — #8070FF.
     static let brand = Color(red: 0x80 / 255.0, green: 0x70 / 255.0, blue: 0xFF / 255.0)
+}
 
-    /// Stable accent per tool so chips are scannable at a glance.
-    static func tool(_ tool: Tool) -> Color {
-        switch tool {
-        case .claude: return .orange
-        case .cursor: return .blue
-        case .codex: return .green
-        case .opencode: return .cyan
-        case .gemini: return .indigo
-        case .kiro: return .pink
-        case .grok: return .gray
+// MARK: - Tool logos
+
+/// Monochrome brand mark for a tool, drawn from the bundled SVGs as a
+/// template image so it takes whatever foreground style the context sets.
+/// Logos instead of colored dots: recognizable at 12pt and no extra color.
+struct ToolLogo: View {
+    let tool: Tool
+    var size: CGFloat = 12
+
+    private static var cache: [Tool: NSImage] = [:]
+
+    static func image(for tool: Tool) -> NSImage? {
+        if let cached = cache[tool] { return cached }
+        guard let url = ResourceBundle.url(forResource: "logo-\(tool.rawValue)", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.isTemplate = true
+        cache[tool] = image
+        return image
+    }
+
+    var body: some View {
+        if let image = ToolLogo.image(for: tool) {
+            Image(nsImage: image)
+                .renderingMode(.template)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+                .accessibilityLabel(tool.displayName)
+        } else {
+            Text(tool.shortName)
+                .font(.system(size: size * 0.6, weight: .bold, design: .rounded))
+                .frame(width: size, height: size)
+                .accessibilityLabel(tool.displayName)
         }
+    }
+}
+
+// MARK: - Coverage
+
+/// One logo per active tool: solid when the skill is linked there, ghosted
+/// when it's missing. The whole point of the library is "every skill in
+/// every tool", so gaps should be visible from the list.
+struct CoverageLogos: View {
+    let tools: [Tool]
+    let live: Set<Tool>
+    var size: CGFloat = 12
+
+    private var missing: [Tool] { tools.filter { !live.contains($0) } }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(tools) { tool in
+                ToolLogo(tool: tool, size: size)
+                    .foregroundStyle(live.contains(tool) ? AnyShapeStyle(.primary) : AnyShapeStyle(.primary.opacity(0.3)))
+                    .help(live.contains(tool)
+                          ? "\(tool.displayName) has this skill"
+                          : "Not linked into \(tool.displayName)")
+            }
+        }
+        .accessibilityLabel(missing.isEmpty
+              ? "Available in every tool"
+              : "Missing from \(missing.count) tools")
+    }
+}
+
+/// Banner for transient notices (success/info/error), shown at the bottom of
+/// the main window. Errors stay until dismissed; others fade on their own.
+struct NoticeBanner: View {
+    let notice: Notice
+    var onDismiss: () -> Void
+
+    private var tint: Color {
+        switch notice.kind {
+        case .info: return .brand
+        case .success: return .green
+        case .error: return .red
+        }
+    }
+
+    private var icon: String {
+        switch notice.kind {
+        case .info: return "info.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).foregroundStyle(tint)
+            Text(notice.text)
+                .font(AppText.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+            Spacer(minLength: 8)
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .frame(maxWidth: 520)
     }
 }

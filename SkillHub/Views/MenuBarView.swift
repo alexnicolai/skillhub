@@ -14,6 +14,13 @@ struct MenuBarView: View {
         if !appState.drift.isEmpty {
             Label("\(appState.drift.count) drift issues", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
         }
+        if !appState.gapSkills.isEmpty {
+            Button {
+                appState.linkEverythingEverywhere()
+            } label: {
+                Label("Link \(appState.gapSkills.count) skills to every tool", systemImage: "link")
+            }
+        }
         Divider()
         Button {
             NSApp.activate(ignoringOtherApps: true)

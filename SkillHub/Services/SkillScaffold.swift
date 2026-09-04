@@ -2,11 +2,17 @@ import Foundation
 
 /// Creates new skills in the canonical store.
 enum SkillScaffold {
-    static func validate(name: String, store: URL) -> String? {
+    /// Name rules every tool agrees on: lowercase kebab, no leading hyphen.
+    static func validateName(_ name: String) -> String? {
         guard !name.isEmpty else { return "Name is required" }
         guard name.range(of: "^[a-z0-9][a-z0-9-]*$", options: .regularExpression) != nil else {
             return "Use lowercase letters, digits, and hyphens (e.g. my-skill)"
         }
+        return nil
+    }
+
+    static func validate(name: String, store: URL) -> String? {
+        if let problem = validateName(name) { return problem }
         if FileManager.default.fileExists(atPath: store.appendingPathComponent(name).path) {
             return "A skill named \(name) already exists"
         }

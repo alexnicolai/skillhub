@@ -20,7 +20,7 @@ struct SkillHubApp: App {
             Group {
                 if onboarded {
                     DashboardView()
-                        .frame(minWidth: 860, minHeight: 520)
+                        .frame(minWidth: 900, minHeight: 540)
                         .onAppear {
                             appState.reload()
                             appState.startWatching()
@@ -45,6 +45,34 @@ struct SkillHubApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesButton()
+            }
+            // Real menu items (not hidden buttons) so shortcuts show up in the
+            // menu bar and work regardless of which pane has focus.
+            CommandGroup(replacing: .newItem) {
+                Button("New Skill…") { appState.showNewSkill = true }
+                    .keyboardShortcut("n", modifiers: .command)
+                Button("Import Skill Folder…") { appState.showImport = true }
+                    .keyboardShortcut("o", modifiers: .command)
+                Button("Install from GitHub…") { appState.showInstall = true }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
+            CommandMenu("Library") {
+                Button("Go to Skill…") { appState.showQuickOpen = true }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("Refresh & Check for Skill Updates") {
+                    appState.reload()
+                    appState.checkForUpdates(force: true)
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                Divider()
+                Button("Link Every Skill to Every Tool") { appState.linkEverythingEverywhere() }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Git Sync…") { appState.showGitPanel = true }
+                    .keyboardShortcut("g", modifiers: [.command, .shift])
+                Divider()
+                Button("Reveal Skill Store in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([AppPaths.repoRoot])
+                }
             }
         }
 

@@ -8,15 +8,7 @@ enum MetaSkillInstaller {
 
     @discardableResult
     static func install(engine: SyncEngine, port: UInt16) throws -> Bool {
-        // Swift 6.3's generated Bundle.module accessor looks for the resource
-        // bundle beside the .app, while make-app.sh correctly embeds it in
-        // Contents/Resources. Prefer the embedded bundle when running as an app
-        // and retain Bundle.module for command-line and test builds.
-        let embeddedBundle = Bundle.main.resourceURL
-            .flatMap { Bundle(url: $0.appendingPathComponent("SkillHub_SkillHub.bundle")) }
-        let resourceBundle = embeddedBundle ?? Bundle.module
-
-        guard let templateURL = resourceBundle.url(forResource: "MetaSkillTemplate", withExtension: "md"),
+        guard let templateURL = ResourceBundle.url(forResource: "MetaSkillTemplate", withExtension: "md"),
               let template = try? String(contentsOf: templateURL, encoding: .utf8) else {
             throw NSError(domain: "SkillHub", code: 7,
                           userInfo: [NSLocalizedDescriptionKey: "MetaSkillTemplate.md missing from bundle"])
@@ -28,14 +20,20 @@ enum MetaSkillInstaller {
         let folder = engine.canonicalFolder(skillName)
         let file = folder.appendingPathComponent("SKILL.md")
         let existing = try? String(contentsOf: file, encoding: .utf8)
-        guard existing != rendered else { return false }  // already current
+        let contentChanged = existing != rendered
 
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        try rendered.write(to: file, atomically: true, encoding: .utf8)
+        if contentChanged {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try rendered.write(to: file, atomically: true, encoding: .utf8)
+        }
 
-        for tool in engine.toolDirs.keys {
+        // Make sure every active tool links to THIS store's copy — a link left
+        // pointing at a moved or temporary store would otherwise never heal.
+        // Only tools that are actually in use: linking into every possible
+        // tool would create config folders for apps the user never installed.
+        for tool in engine.toolDirs.keys where tool.isActive && !engine.isLinked(skill: skillName, for: tool) {
             try? engine.enable(skill: skillName, for: tool)
         }
-        return true
+        return contentChanged
     }
 }

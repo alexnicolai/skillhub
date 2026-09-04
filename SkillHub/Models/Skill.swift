@@ -28,8 +28,25 @@ struct Skill: Identifiable, Equatable {
     var summary: String {
         if let s = shortDescription, !s.isEmpty { return s }
         // Descriptions are often long trigger lists; take the first sentence.
-        let firstSentence = description.split(separator: ".", maxSplits: 1).first.map(String.init) ?? description
+        let firstSentence = Skill.firstSentence(of: description)
         return firstSentence.count > 140 ? String(firstSentence.prefix(140)) + "…" : firstSentence
+    }
+
+    /// Sentence boundary = ". " not preceded by a common abbreviation or a
+    /// lone initial, so "e.g. buttons" and "animations.dev" stay intact.
+    private static let abbreviations: Set<String> = ["e.g", "i.e", "etc", "vs", "cf", "approx", "no", "st", "dr", "mr", "ms"]
+
+    static func firstSentence(of text: String) -> String {
+        var searchStart = text.startIndex
+        while let range = text.range(of: ". ", range: searchStart..<text.endIndex) {
+            let before = text[..<range.lowerBound]
+            let lastWord = before.split(whereSeparator: { $0 == " " || $0 == "(" || $0 == "," })
+                .last.map { String($0).lowercased() } ?? ""
+            let isAbbreviation = abbreviations.contains(lastWord) || lastWord.count <= 1
+            if !isAbbreviation { return String(before) }
+            searchStart = range.upperBound
+        }
+        return text.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     }
 
     static func == (lhs: Skill, rhs: Skill) -> Bool {
