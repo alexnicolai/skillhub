@@ -15,20 +15,22 @@ struct SkillDetailView: View {
     @State private var historyEntries: [GitService.HistoryEntry] = []
     @State private var updating = false
 
+    /// Two panes: the skill itself (read or edit in place) and everything
+    /// about it (files, history, source, dates).
     enum Tab: Int, CaseIterable {
-        case preview, edit, files, info
+        case skill, details
 
         var title: String {
             switch self {
-            case .preview: return "Preview"
-            case .edit: return "Edit"
-            case .files: return "Files"
-            case .info: return "Info"
+            case .skill: return "Skill"
+            case .details: return "Details"
             }
         }
     }
 
-    @State private var tab: Tab = .preview
+    @State private var tab: Tab = .skill
+    /// Editing happens in the Skill tab; the editor autosaves.
+    @State private var editing = false
     /// +1 when moving to a later tab, -1 earlier — drives the directional hint.
     @State private var tabDirection: CGFloat = 1
     @State private var skillMdContent: String = ""
@@ -41,10 +43,27 @@ struct SkillDetailView: View {
         VStack(spacing: 0) {
             header
 
-            UnderlineTabs(
-                tabs: Tab.allCases.map { ($0, $0.title) },
-                selection: tabBinding
-            )
+            HStack(alignment: .center) {
+                UnderlineTabs(
+                    tabs: Tab.allCases.map { ($0, $0.title) },
+                    selection: tabBinding
+                )
+                Spacer()
+                if tab == .skill {
+                    Button {
+                        withAnimation(Motion.content) { editing.toggle() }
+                    } label: {
+                        Label(editing ? "Done" : "Edit",
+                              systemImage: editing ? "checkmark" : "pencil")
+                    }
+                    .glassButton(prominent: editing)
+                    .controlSize(.small)
+                    .keyboardShortcut("e", modifiers: .command)
+                    .help(editing ? "Back to the formatted view (changes are already saved)"
+                                  : "Edit SKILL.md in place — changes save automatically (⌘E)")
+                    .padding(.bottom, 6)
+                }
+            }
             .padding(.horizontal, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .bottom) { Divider() }
@@ -53,54 +72,23 @@ struct SkillDetailView: View {
             // panes; exits are plain fades (shorter/simpler than entries).
             ZStack {
                 switch tab {
-                case .preview: previewTab
-                case .edit: MarkdownEditorView(fileURL: skillMdURL, content: $skillMdContent) {
-                    appState.skillFileWasEdited(skill.name)
-                }
-                case .files: filesTab
-                case .info: infoTab
+                case .skill:
+                    if editing {
+                        MarkdownEditorView(fileURL: skillMdURL, content: $skillMdContent) {
+                            appState.skillFileWasEdited(skill.name)
+                        }
+                    } else {
+                        previewTab
+                    }
+                case .details: detailsTab
                 }
             }
-            .id(tab)
+            .id("\(tab.rawValue)-\(editing)")
             .transition(Motion.paneSwap(direction: tabDirection, reduceMotion: reduceMotion))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
         .navigationTitle(skill.name)
-        .toolbar {
-            // One overflow menu instead of scattered lone icons.
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    if !Set(appState.activeTools).isSubset(of: skill.liveTools) {
-                        Button {
-                            appState.enableEverywhere([skill.name])
-                        } label: {
-                            Label("Make Available in Every Tool", systemImage: "link")
-                        }
-                    }
-                    Button {
-                        NSWorkspace.shared.open(skillMdURL)
-                    } label: {
-                        Label("Open SKILL.md in Default Editor", systemImage: "arrow.up.forward.app")
-                    }
-                    Button {
-                        NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
-                    } label: {
-                        Label("Reveal in Finder", systemImage: "folder")
-                    }
-                    ShareMenu(skill: skill)
-                    Divider()
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        Label("Remove from Library…", systemImage: "trash")
-                    }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                }
-                .help("Reveal, share, or remove this skill")
-            }
-        }
         // Loading history in .task (not during body evaluation) — the git
         // subprocess in the Form was wedging the tab transition until the next
         // window event.
@@ -118,8 +106,8 @@ struct SkillDetailView: View {
         }
         // The store changed under us (watcher, update, restore): re-read the
         // preview unless the user is mid-edit.
-        .onChange(of: skill.contentHash) { if tab != .edit { loadContent() } }
-        .onChange(of: appState.skills) { if tab != .edit { loadContent() } }
+        .onChange(of: skill.contentHash) { if !editing { loadContent() } }
+        .onChange(of: appState.skills) { if !editing { loadContent() } }
         .sheet(isPresented: $showDiff) {
             DiffSheet(
                 title: "\(skill.name): local vs upstream",
@@ -139,7 +127,7 @@ struct SkillDetailView: View {
             // Selection changes are high-frequency: swap content instantly,
             // never animate the pane on a new skill.
             var t = Transaction(); t.disablesAnimations = true
-            withTransaction(t) { tab = .preview }
+            withTransaction(t) { tab = .skill; editing = false }
         }
         .confirmationDialog(
             "Overwrite local changes?",
@@ -180,7 +168,7 @@ struct SkillDetailView: View {
 
     /// Persist the in-memory draft of `previousName` if it differs from disk.
     private func flushUnsavedEdits(for previousName: String) {
-        guard tab == .edit,
+        guard editing,
               let folder = appState.skills.first(where: { $0.name == previousName })?.folderURL else { return }
         let url = folder.appendingPathComponent("SKILL.md")
         let onDisk = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
@@ -270,17 +258,18 @@ struct SkillDetailView: View {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
-                    .background(Color.brand.opacity(0.14), in: Capsule())
                     .foregroundStyle(Color.brand)
+                    .glassSurface(tint: .brand)
                     .transition(Motion.popIn(reduceMotion: reduceMotion))
                 }
                 Spacer()
                 if skill.usageCount > 0 {
-                    Label("\(skill.usageCount) uses", systemImage: "chart.bar.fill")
+                    Label(plural(skill.usageCount, "use"), systemImage: "chart.bar.fill")
                         .font(AppText.secondary.monospacedDigit())
                         .foregroundStyle(.tertiary)
-                        .help("Used \(skill.usageCount) times (Claude Code transcripts)")
+                        .help("Used \(plural(skill.usageCount, "time")) (Claude Code transcripts)")
                 }
+                actionsMenu
             }
 
             Text(skill.summary)
@@ -305,8 +294,8 @@ struct SkillDetailView: View {
                 .buttonStyle(PressableButtonStyle())
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .background((skill.hasErrors ? Color.red : .orange).opacity(0.12), in: Capsule())
                 .foregroundStyle(skill.hasErrors ? Color.red : .orange)
+                .glassSurface(tint: skill.hasErrors ? .red : .orange)
                 .padding(.top, 8)
                 .help("Click for details")
                 .popover(isPresented: $showIssues, arrowEdge: .bottom) {
@@ -348,12 +337,12 @@ struct SkillDetailView: View {
                         Button {
                             appState.enableEverywhere([skill.name])
                         } label: {
-                            Text("Everywhere")
-                                .font(.system(size: 10, weight: .semibold))
+                            Label("Add to all tools", systemImage: "plus")
+                                .font(.system(size: 11, weight: .semibold))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Color.brand)
-                        .help("Link this skill into every detected tool")
+                        .help("Symlink this skill into every tool it's missing from")
                     }
                 }
                 ToolTogglesView(skill: skill)
@@ -366,6 +355,39 @@ struct SkillDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(Motion.small, value: skill.updateAvailable)
         .animation(Motion.small, value: updateError)
+    }
+
+    /// Everything you can do to the skill as a whole, in one place.
+    private var actionsMenu: some View {
+        Menu {
+            Button {
+                NSWorkspace.shared.open(skillMdURL)
+            } label: {
+                Label("Open SKILL.md in Default Editor", systemImage: "arrow.up.forward.app")
+            }
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([skill.folderURL])
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+            ShareMenu(skill: skill)
+            Divider()
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Label("Remove from Library…", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 16, height: 16)
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .glassButton()
+        .controlSize(.small)
+        .fixedSize()
+        .help("Open, reveal, share, or remove this skill")
+        .accessibilityLabel("Skill actions")
     }
 
     // MARK: - Tabs
@@ -425,13 +447,6 @@ struct SkillDetailView: View {
 
     @State private var fileList: [String] = []
 
-    private var filesTab: some View {
-        List(fileList, id: \.self) { rel in
-            FileRow(rel: rel, icon: iconForFile(rel), folderURL: skill.folderURL)
-        }
-        .scrollContentBackground(.hidden)
-    }
-
     /// One file row: hover highlights the row and reveals its action.
     private struct FileRow: View {
         let rel: String
@@ -478,7 +493,7 @@ struct SkillDetailView: View {
         return "doc"
     }
 
-    private var infoTab: some View {
+    private var detailsTab: some View {
         Form {
             if !skill.issues.isEmpty {
                 Section("Health") {
@@ -492,6 +507,11 @@ struct SkillDetailView: View {
                                 .foregroundStyle(issue.severity == .error ? .red : .orange)
                         }
                     }
+                }
+            }
+            Section("Files") {
+                ForEach(fileList, id: \.self) { rel in
+                    FileRow(rel: rel, icon: iconForFile(rel), folderURL: skill.folderURL)
                 }
             }
             Section("History") {

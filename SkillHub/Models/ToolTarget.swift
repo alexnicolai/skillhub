@@ -63,6 +63,8 @@ enum Tool: String, CaseIterable, Codable, Identifiable, Comparable {
     var protectedEntries: Set<String> {
         switch self {
         case .codex: return [".system", "codex-primary-runtime", ".codex-system-skills.marker"]
+        // The Claude desktop app keeps its own synced skills here.
+        case .claude: return ["synced"]
         default: return []
         }
     }

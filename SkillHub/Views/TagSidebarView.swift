@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Leftmost column: library scopes, review queues, per-tool coverage, and
-/// user-defined tags. Tags replace folders — one skill can carry many, and
-/// clicking one scopes the skill list instantly.
+/// Leftmost column: the library, one "Needs Attention" queue, and tags.
+/// Per-tool coverage sits in a compact footer (ToolCoverageBar) instead of a
+/// section of its own. Tags replace folders — one skill can carry many.
 struct TagSidebarView: View {
     @Environment(AppState.self) private var appState
 
@@ -13,59 +13,17 @@ struct TagSidebarView: View {
                 Label("All Skills", systemImage: "square.stack.3d.up")
                     .badge(appState.skills.count)
                     .tag(SidebarItem.all)
-                if !appState.gapSkills.isEmpty {
-                    Label("Not in every tool", systemImage: "circle.dotted")
-                        .badge(appState.gapSkills.count)
-                        .tag(SidebarItem.gaps)
-                        .help("Skills at least one of your tools can't see yet")
+                if appState.attentionCount > 0 {
+                    Label("Needs Attention", systemImage: "exclamationmark.circle")
+                        .badge(appState.attentionCount)
+                        .tag(SidebarItem.attention)
+                        .help("Skills missing from a tool, with an update, or with health problems — plus broken links and conflicts")
                 }
-                if !appState.updateAvailable.isEmpty {
-                    Label("Updates", systemImage: "arrow.down.circle")
-                        .badge(appState.updateAvailable.count)
-                        .tag(SidebarItem.updates)
-                }
-                if appState.issueCount > 0 {
-                    Label("Issues", systemImage: "stethoscope")
-                        .badge(appState.issueCount)
-                        .tag(SidebarItem.issues)
-                        .help("Skills with health problems: bad frontmatter, broken links, oversized files")
-                }
-                if appState.unusedCount > 0 && appState.unusedCount < appState.skills.count {
-                    Label("No recorded uses", systemImage: "moon.zzz")
-                        .badge(appState.unusedCount)
-                        .tag(SidebarItem.unused)
-                        .help("Never seen in Claude Code transcripts — candidates for pruning")
-                }
-            }
-
-            if !appState.conflicts.isEmpty || !appState.inbox.isEmpty {
-                Section("Review") {
-                    if !appState.conflicts.isEmpty {
-                        Label("Conflicts", systemImage: "exclamationmark.triangle")
-                            .badge(appState.conflicts.count)
-                            .tag(SidebarItem.conflicts)
-                    }
-                    if !appState.inbox.isEmpty {
-                        Label("Inbox", systemImage: "tray")
-                            .badge(appState.inbox.count)
-                            .tag(SidebarItem.inbox)
-                            .help("Skills proposed by your agents, waiting for approval")
-                    }
-                }
-            }
-
-            Section {
-                ForEach(appState.activeTools) { tool in
-                    ToolRow(tool: tool, linked: appState.linkedCount(for: tool), total: appState.skills.count)
-                        .tag(SidebarItem.tool(tool))
-                }
-            } header: {
-                Text("Tools")
-            } footer: {
-                if appState.activeTools.isEmpty {
-                    Text("No AI tools detected. Turn one on in Settings → Tools.")
-                        .font(AppText.small)
-                        .foregroundStyle(.secondary)
+                if !appState.inbox.isEmpty {
+                    Label("Inbox", systemImage: "tray")
+                        .badge(appState.inbox.count)
+                        .tag(SidebarItem.inbox)
+                        .help("Skills proposed by your agents, waiting for approval")
                 }
             }
 
@@ -84,55 +42,6 @@ struct TagSidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle(Brand.displayName)
-    }
-
-    /// One tool: colored dot, coverage fraction, and a link-all shortcut.
-    private struct ToolRow: View {
-        @Environment(AppState.self) private var appState
-        let tool: Tool
-        let linked: Int
-        let total: Int
-
-        private var complete: Bool { total > 0 && linked == total }
-
-        var body: some View {
-            Label {
-                HStack(spacing: 6) {
-                    Text(tool.displayName)
-                    Spacer()
-                    if complete {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .help("Every skill is linked here")
-                    } else {
-                        Text("\(linked)/\(total)")
-                            .font(.system(size: 11).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } icon: {
-                ToolLogo(tool: tool, size: 13)
-                    .foregroundStyle(.secondary)
-            }
-            .contextMenu {
-                if !complete {
-                    Button {
-                        appState.enableAll(for: tool)
-                    } label: {
-                        Label("Link All \(total) Skills to \(tool.displayName)", systemImage: "link")
-                    }
-                }
-                Button {
-                    NSWorkspace.shared.activateFileViewerSelecting([tool.skillsDir])
-                } label: {
-                    Label("Reveal Skills Folder in Finder", systemImage: "folder")
-                }
-            }
-            .help(complete
-                  ? "\(tool.displayName) has every skill"
-                  : "\(tool.displayName) is missing \(total - linked) skills — right-click to link all")
-        }
     }
 
     /// One tag row: drop target for skills dragged from the list.
@@ -172,6 +81,96 @@ struct TagSidebarView: View {
                 }
             }
             .help("Drop skills here to tag them #\(tag)")
+        }
+    }
+}
+
+/// Sidebar footer: a glass capsule with one segment per tool showing how many skills it has.
+/// Click a tool to list its skills (click again to go back to All Skills).
+/// The dot on the right is the local API's status.
+struct ToolCoverageBar: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // One glass capsule holding a segment per tool.
+            if !appState.activeTools.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(appState.activeTools) { tool in
+                        ToolChip(tool: tool)
+                    }
+                }
+                .padding(2)
+                .glassSurface()
+            }
+            Spacer(minLength: 0)
+            Circle()
+                .fill(appState.serverPort > 0 ? Color.green : Color.red)
+                .frame(width: 6, height: 6)
+                .help(appState.serverError
+                      ?? (appState.serverPort > 0
+                          ? "Agents read the live catalog from 127.0.0.1:\(String(appState.serverPort))"
+                          : "API offline"))
+                .accessibilityLabel(appState.serverPort > 0 ? "API online" : "API offline")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .overlay {
+            if appState.activeTools.isEmpty {
+                Text("No AI tools detected — turn one on in Settings → Tools.")
+                    .font(AppText.small)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private struct ToolChip: View {
+        @Environment(AppState.self) private var appState
+        let tool: Tool
+
+        private var linked: Int { appState.linkedCount(for: tool) }
+        private var total: Int { appState.skills.count }
+        private var complete: Bool { total > 0 && linked == total }
+        private var selected: Bool { appState.sidebarSelection == .tool(tool) }
+
+        var body: some View {
+            Button {
+                appState.sidebarSelection = selected ? .all : .tool(tool)
+            } label: {
+                HStack(spacing: 4) {
+                    ToolLogo(tool: tool, size: 11)
+                    if complete {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .bold))
+                    } else {
+                        Text("\(linked)")
+                            .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    }
+                }
+                .foregroundStyle(selected ? AnyShapeStyle(Color.white) : AnyShapeStyle(.secondary))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(selected ? Color.brand : Color.clear, in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(complete
+                  ? "\(tool.displayName) has every skill"
+                  : "\(tool.displayName): \(linked) of \(total) skills — click to list them, right-click to add the rest")
+            .contextMenu {
+                if !complete {
+                    Button {
+                        appState.enableAll(for: tool)
+                    } label: {
+                        Label("Add All \(total) Skills to \(tool.displayName)", systemImage: "link")
+                    }
+                }
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([tool.skillsDir])
+                } label: {
+                    Label("Reveal Skills Folder in Finder", systemImage: "folder")
+                }
+            }
         }
     }
 }

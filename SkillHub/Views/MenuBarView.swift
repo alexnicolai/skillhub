@@ -4,21 +4,21 @@ struct MenuBarView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        Label("\(appState.skills.count) skills in catalog", systemImage: "wand.and.stars")
+        Label("\(plural(appState.skills.count, "skill")) in catalog", systemImage: "wand.and.stars")
         if appState.serverPort > 0 {
             Label("API · 127.0.0.1:\(String(appState.serverPort))", systemImage: "antenna.radiowaves.left.and.right")
         }
         if !appState.updateAvailable.isEmpty {
-            Label("\(appState.updateAvailable.count) updates available", systemImage: "arrow.down.circle")
+            Label("\(plural(appState.updateAvailable.count, "update")) available", systemImage: "arrow.down.circle")
         }
         if !appState.drift.isEmpty {
-            Label("\(appState.drift.count) drift issues", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+            Label(plural(appState.drift.count, "broken link"), systemImage: "exclamationmark.arrow.triangle.2.circlepath")
         }
         if !appState.gapSkills.isEmpty {
             Button {
                 appState.linkEverythingEverywhere()
             } label: {
-                Label("Link \(appState.gapSkills.count) skills to every tool", systemImage: "link")
+                Label("Add \(plural(appState.gapSkills.count, "skill")) to all tools", systemImage: "link")
             }
         }
         Divider()

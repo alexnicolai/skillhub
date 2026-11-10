@@ -5,7 +5,6 @@ struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showDriftPopover = false
-    @State private var showCoveragePopover = false
     @State private var pendingRemoval: Set<String> = []
     /// Folders chosen for import whose names already exist in the store.
     @State private var pendingImport: [URL] = []
@@ -18,7 +17,7 @@ struct DashboardView: View {
             TagSidebarView()
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    sidebarFooter
+                    ToolCoverageBar()
                 }
         } content: {
             Group {
@@ -131,16 +130,22 @@ struct DashboardView: View {
         }
         .searchable(text: $state.searchText, prompt: searchPrompt)
         .navigationTitle(contentTitle)
-        // Things that need attention live above the list, where there is
-        // room for words — the toolbar squeezed them down to bare icons.
+        // Problems live in one place — Needs Attention — with its filter and
+        // fix-all actions floating above the list as glass controls.
         .safeAreaInset(edge: .top, spacing: 0) {
-            if hasAttentionItems {
-                statusItems
+            if state.sidebarSelection == .attention {
+                attentionBar
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.bar)
-                    .overlay(alignment: .bottom) { Divider() }
+            } else if !state.isMigrated {
+                Label("Legacy layout — run SkillHub adopt to unify", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .glassSurface(tint: .orange)
+                    .padding(8)
             }
         }
         .overlay {
@@ -190,8 +195,7 @@ struct DashboardView: View {
             Button {
                 appState.enableEverywhere(selection)
             } label: {
-                Label(n > 1 ? "Make \(n) Skills Available in Every Tool" : "Make Available in Every Tool",
-                      systemImage: "link")
+                Label(n > 1 ? "Add \(n) Skills to All Tools" : "Add to All Tools", systemImage: "link")
             }
         }
         Button {
@@ -217,18 +221,17 @@ struct DashboardView: View {
     @ViewBuilder
     private var emptyScopeView: some View {
         switch appState.sidebarSelection {
-        case .issues:
-            ContentUnavailableView("All healthy", systemImage: "checkmark.seal",
-                description: Text("No skills have doctor findings."))
-        case .gaps:
-            ContentUnavailableView("Everything, everywhere", systemImage: "checkmark.seal",
-                description: Text("Every skill is available in every tool."))
-        case .unused:
-            ContentUnavailableView("Everything gets used", systemImage: "chart.bar",
-                description: Text("Every skill has at least one recorded use."))
+        case .attention:
+            if appState.drift.isEmpty && appState.conflicts.isEmpty {
+                ContentUnavailableView("All clear", systemImage: "checkmark.seal",
+                    description: Text("Every skill is in every tool, up to date, and healthy."))
+            } else {
+                ContentUnavailableView("Every skill looks good", systemImage: "checkmark.seal",
+                    description: Text("What's left is in the bar above."))
+            }
         case .tool(let tool):
             ContentUnavailableView("Nothing linked yet", systemImage: "link",
-                description: Text("Right-click \(tool.displayName) in the sidebar to link every skill."))
+                description: Text("Right-click \(tool.displayName) in the sidebar footer to add every skill."))
         default:
             ContentUnavailableView("No skills here", systemImage: "number",
                 description: Text("Nothing carries this tag yet — add it from a skill's header, or drag skills onto the tag."))
@@ -257,7 +260,7 @@ struct DashboardView: View {
             ContentUnavailableView {
                 Label("Select a skill", systemImage: "wand.and.stars")
             } description: {
-                Text("\(state.skills.count) skills across \(state.activeTools.count) tools — one source of truth. ⌘K to jump, ⌘N to create, ⇧⌘I to install.")
+                Text("\(plural(state.skills.count, "skill")) across \(plural(state.activeTools.count, "tool")) — one source of truth. ⌘K to jump, ⌘N to create, ⇧⌘I to install.")
             }
         }
     }
@@ -315,10 +318,7 @@ struct DashboardView: View {
     private var contentTitle: String {
         switch appState.sidebarSelection {
         case .all: return "All Skills"
-        case .updates: return "Updates"
-        case .issues: return "Issues"
-        case .gaps: return "Not in every tool"
-        case .unused: return "No recorded uses"
+        case .attention: return "Needs Attention"
         case .conflicts: return "Conflicts"
         case .inbox: return "Inbox"
         case .tool(let tool): return tool.displayName
@@ -328,91 +328,79 @@ struct DashboardView: View {
 
     private var searchPrompt: String {
         switch appState.sidebarSelection {
-        case .all: return "Search \(appState.skills.count) skills"
+        case .all: return "Search \(plural(appState.skills.count, "skill"))"
         case .tag(let tag): return "Search #\(tag)"
         case .tool(let tool): return "Search \(tool.displayName)"
         default: return "Search"
         }
     }
 
-    // MARK: - Status pills
+    // MARK: - Needs Attention bar
 
-    private var hasAttentionItems: Bool {
-        !appState.isMigrated || !appState.drift.isEmpty
-            || !appState.gapSkills.isEmpty || !appState.updateAvailable.isEmpty
+    /// Filters that currently match something; "All" always shows.
+    private var attentionFilters: [AttentionFilter] {
+        AttentionFilter.allCases.filter { filter in
+            switch filter {
+            case .all: return true
+            case .missing: return !appState.gapSkills.isEmpty
+            case .updates: return !appState.updateAvailable.isEmpty
+            case .health: return appState.skills.contains { !$0.issues.isEmpty }
+            }
+        }
     }
 
-    private var statusItems: some View {
-        HStack(spacing: 6) {
-            if !appState.isMigrated {
-                Label("Legacy layout — run Adopt to unify", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
+    private var attentionBar: some View {
+        @Bindable var state = appState
+        return VStack(alignment: .leading, spacing: 8) {
+            if attentionFilters.count > 2 {
+                Picker("Show", selection: $state.attentionFilter) {
+                    ForEach(attentionFilters) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
-            if !appState.drift.isEmpty {
-                statusPill("\(appState.drift.count) drift",
-                           icon: "exclamationmark.arrow.triangle.2.circlepath", color: .orange) {
-                    showDriftPopover = true
-                }
-                .popover(isPresented: $showDriftPopover) {
-                    DriftListView()
-                        .frame(minWidth: 460, minHeight: 240)
-                }
-            }
-            if !appState.gapSkills.isEmpty {
-                statusPill("\(appState.gapSkills.count) not everywhere",
-                           icon: "circle.dotted", color: .brand) {
-                    showCoveragePopover = true
-                }
-                .popover(isPresented: $showCoveragePopover) {
-                    CoveragePopover()
-                }
-            }
-            if !appState.updateAvailable.isEmpty {
-                statusPill("\(appState.updateAvailable.count) updates",
-                           icon: "arrow.down.circle", color: .brand) {
-                    appState.sidebarSelection = .updates
+            GlassGroup(spacing: 6) {
+                FlowLayout(spacing: 6, rowSpacing: 6) {
+                    if !appState.gapSkills.isEmpty {
+                        Button {
+                            appState.linkEverythingEverywhere()
+                        } label: {
+                            Label("Add \(plural(appState.gapSkills.count, "skill")) to all tools",
+                                  systemImage: "link")
+                        }
+                        .glassButton(prominent: true)
+                        .help("Symlinks every skill into every detected tool (⇧⌘L)")
+                    }
+                    if !appState.drift.isEmpty {
+                        Button {
+                            showDriftPopover = true
+                        } label: {
+                            Label("Fix \(plural(appState.drift.count, "broken link"))",
+                                  systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                        }
+                        .glassButton()
+                        .popover(isPresented: $showDriftPopover) {
+                            DriftListView()
+                                .frame(minWidth: 460, minHeight: 240)
+                        }
+                    }
+                    if !appState.conflicts.isEmpty {
+                        Button {
+                            appState.sidebarSelection = .conflicts
+                        } label: {
+                            Label("Review \(plural(appState.conflicts.count, "conflict"))",
+                                  systemImage: "exclamationmark.triangle")
+                        }
+                        .glassButton()
+                    }
                 }
             }
         }
-        .animation(Motion.small, value: appState.drift.count)
-        .animation(Motion.small, value: appState.gapSkills.count)
-        .animation(Motion.small, value: appState.updateAvailable.count)
-    }
-
-    private func statusPill(_ text: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(text, systemImage: icon)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(color.opacity(0.14), in: Capsule())
+        .controlSize(.small)
+        .onChange(of: attentionFilters) { _, available in
+            if !available.contains(state.attentionFilter) { state.attentionFilter = .all }
         }
-        .buttonStyle(PressableButtonStyle())
-        .transition(Motion.popIn(reduceMotion: reduceMotion))
-    }
-
-    private var sidebarFooter: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(appState.serverPort > 0 ? .green : .red)
-                .frame(width: 6, height: 6)
-            Text(appState.serverPort > 0
-                 ? "API · 127.0.0.1:\(String(appState.serverPort))"
-                 : "API offline")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(appState.skills.count)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
-        .help(appState.serverError ?? "Agents read the live catalog from this address")
     }
 
     // MARK: - Import
@@ -447,61 +435,6 @@ struct DashboardView: View {
             pendingImport = urls
             pendingImportDuplicates = duplicates
         }
-    }
-}
-
-/// Per-tool coverage at a glance with the one button that matters.
-private struct CoveragePopover: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Coverage").font(.headline)
-                Text("Which of your tools can see every skill.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                ForEach(appState.activeTools) { tool in
-                    let linked = appState.linkedCount(for: tool)
-                    let total = appState.skills.count
-                    GridRow {
-                        Label {
-                            Text(tool.displayName)
-                        } icon: {
-                            ToolLogo(tool: tool, size: 12)
-                        }
-                        .font(AppText.secondary)
-                        ProgressView(value: Double(linked), total: Double(max(total, 1)))
-                            .tint(linked == total ? Color.green : Color.brand)
-                            .frame(width: 140)
-                        Text("\(linked)/\(total)")
-                            .font(AppText.small.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .gridColumnAlignment(.trailing)
-                    }
-                }
-            }
-            HStack {
-                Button("Show Skills") {
-                    appState.sidebarSelection = .gaps
-                    dismiss()
-                }
-                Spacer()
-                Button {
-                    appState.linkEverythingEverywhere()
-                    dismiss()
-                } label: {
-                    Label("Link Every Skill to Every Tool", systemImage: "link")
-                }
-                .buttonStyle(.borderedProminent)
-                .help("Symlinks every skill into every detected tool (⇧⌘L)")
-            }
-        }
-        .padding(16)
-        .frame(width: 380)
     }
 }
 

@@ -65,7 +65,7 @@ struct SkillHubApp: App {
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 Divider()
-                Button("Link Every Skill to Every Tool") { appState.linkEverythingEverywhere() }
+                Button("Add Every Skill to All Tools") { appState.linkEverythingEverywhere() }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
                 Button("Git Sync…") { appState.showGitPanel = true }
                     .keyboardShortcut("g", modifiers: [.command, .shift])

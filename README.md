@@ -29,14 +29,14 @@ If you use more than one AI coding tool, your skills scatter: copies drift apart
 ## What Skill Library does
 
 - **One store.** All skills live in a single git repo (`~/ai-skills` by default). Every tool reads them through per-skill **symlinks** — edit once, every tool sees it instantly.
-- **Every skill, every tool.** Each row shows which tools can see the skill; the sidebar shows per-tool coverage; **Link Every Skill to Every Tool** (`⇧⌘L`) closes every gap in one click. New skills — created, installed, imported, or approved — land in every detected tool automatically.
+- **Every skill, every tool.** Rows flag skills a tool can't see; the sidebar footer shows per-tool coverage; **Needs Attention** gathers every gap, update, and health problem in one list, and **Add to all tools** (`⇧⌘L`) closes every gap in one click. New skills — created, installed, imported, or approved — land in every detected tool automatically.
 - **Create, import & edit.** `⌘N` scaffolds a well-formed skill; `⌘O` (or drag-and-drop from Finder) imports existing skill folders, replacing on request; the raw editor autosaves; `⌘K` fuzzy-jumps to any skill.
 - **Install from GitHub.** Browse any repo's SKILL.md folders, cherry-pick, install with provenance wired for updates.
 - **Tags, not folders.** Tag skills (or drag them onto sidebar tags), filter instantly, bulk-tag and bulk-remove selections.
 - **Updates with diffs.** Skill Library compares skills against their source repos, shows what changed before you update, and guards local edits. The app updates itself via Sparkle.
 - **Skill doctor.** Broken frontmatter, dead links, and oversized skills (context-window cost) surfaced automatically.
 - **Drift & conflicts.** Diverged tool copies get a badge, a diff, and one-click repair that also absorbs skills living in other stores (e.g. `~/.agents/skills`) — with backups, always.
-- **Usage metrics.** Counts skill invocations from Claude Code transcripts; a smart group surfaces never-used skills for pruning.
+- **Usage metrics.** Counts skill invocations from Claude Code transcripts and shows them on each skill.
 - **Cross-machine sync.** Commit/push/pull from the toolbar; clone + adopt on your other Macs.
 - **Version history.** Every skill's git history in the app, with one-click restore.
 - **Agents read — and write.** A localhost API serves the live catalog, and agents can **propose** skills into a review inbox (`POST /skills`). Nothing activates without your approval.

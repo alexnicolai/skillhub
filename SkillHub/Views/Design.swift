@@ -222,6 +222,59 @@ extension Color {
     static let brand = Color(red: 0x80 / 255.0, green: 0x70 / 255.0, blue: 0xFF / 255.0)
 }
 
+// MARK: - Liquid Glass
+
+/// Liquid Glass on macOS 26+, a plain material before that. Keep glass for
+/// controls that float over content (bars, pills, banners) — not for rows or
+/// large reading areas, where it only adds noise.
+extension View {
+    /// A glass capsule/rounded surface, optionally tinted and press-reactive.
+    @ViewBuilder
+    func glassSurface(tint: Color? = nil, interactive: Bool = false,
+                      cornerRadius: CGFloat? = nil) -> some View {
+        if #available(macOS 26, *) {
+            let glass = Glass.regular.tint(tint?.opacity(0.35)).interactive(interactive)
+            if let cornerRadius {
+                self.glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            } else {
+                self.glassEffect(glass, in: Capsule())
+            }
+        } else if let cornerRadius {
+            self.background((tint ?? .clear).opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .background(.regularMaterial,
+                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            self.background((tint ?? .clear).opacity(0.12), in: Capsule())
+                .background(.regularMaterial, in: Capsule())
+        }
+    }
+
+    /// The system glass button style, or bordered before macOS 26.
+    @ViewBuilder
+    func glassButton(prominent: Bool = false) -> some View {
+        if #available(macOS 26, *) {
+            if prominent { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.glass) }
+        } else {
+            if prominent { self.buttonStyle(.borderedProminent) } else { self.buttonStyle(.bordered) }
+        }
+    }
+}
+
+/// Groups neighbouring glass shapes so they blend and morph together.
+struct GlassGroup<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        if #available(macOS 26, *) {
+            GlassEffectContainer(spacing: spacing) { content }
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Tool logos
 
 /// Monochrome brand mark for a tool, drawn from the bundled SVGs as a
@@ -262,29 +315,19 @@ struct ToolLogo: View {
 
 // MARK: - Coverage
 
-/// One logo per active tool: solid when the skill is linked there, ghosted
-/// when it's missing. The whole point of the library is "every skill in
-/// every tool", so gaps should be visible from the list.
-struct CoverageLogos: View {
-    let tools: [Tool]
-    let live: Set<Tool>
-    var size: CGFloat = 12
-
-    private var missing: [Tool] { tools.filter { !live.contains($0) } }
+/// Quiet marker for a skill some tools can't see. Rows stay clean when a
+/// skill is everywhere; the tooltip names the tools it's missing from.
+struct MissingToolsMark: View {
+    let missing: [Tool]
 
     var body: some View {
-        HStack(spacing: 7) {
-            ForEach(tools) { tool in
-                ToolLogo(tool: tool, size: size)
-                    .foregroundStyle(live.contains(tool) ? AnyShapeStyle(.primary) : AnyShapeStyle(.primary.opacity(0.3)))
-                    .help(live.contains(tool)
-                          ? "\(tool.displayName) has this skill"
-                          : "Not linked into \(tool.displayName)")
-            }
+        if !missing.isEmpty {
+            Image(systemName: "circle.dotted")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.brand)
+                .help("Not in " + missing.map(\.displayName).formatted(.list(type: .and)))
+                .accessibilityLabel("Missing from \(plural(missing.count, "tool"))")
         }
-        .accessibilityLabel(missing.isEmpty
-              ? "Available in every tool"
-              : "Missing from \(missing.count) tools")
     }
 }
 
@@ -330,12 +373,7 @@ struct NoticeBanner: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(tint.opacity(0.35), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .glassSurface(tint: notice.kind == .error ? tint : nil, cornerRadius: 14)
         .frame(maxWidth: 520)
     }
 }

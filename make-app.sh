@@ -23,6 +23,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 
 cp .build/release/SkillHub "$APP/Contents/MacOS/SkillHub"
 
+# SwiftPM stamps the deployment target (14.0) as the binary's SDK version.
+# AppKit reads that stamp to pick the design: a pre-26 SDK means the legacy
+# look, no Liquid Glass. Record the SDK we actually built against. (Signing
+# happens below, after this edit.)
+SDK_VERSION=$(xcrun --sdk macosx --show-sdk-version)
+vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace \
+  -output "$APP/Contents/MacOS/SkillHub" "$APP/Contents/MacOS/SkillHub"
+
 # Embed Sparkle (linked as @rpath/…; rpath @executable_path/../Frameworks is
 # set in Package.swift linkerSettings).
 SPARKLE_FW=.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework

@@ -9,7 +9,7 @@ struct ToolTogglesView: View {
 
     var body: some View {
         FlowLayout(spacing: 6, rowSpacing: 6) {
-            ForEach(Tool.active) { tool in
+            ForEach(appState.activeTools) { tool in
                 TogglePill(
                     tool: tool,
                     isOn: skill.liveTools.contains(tool),
@@ -32,7 +32,7 @@ struct ToolTogglesView: View {
             Button {
                 action(!isOn)
             } label: {
-                HStack(spacing: 5) {
+                let pill = HStack(spacing: 5) {
                     ToolLogo(tool: tool, size: 11)
                     Text(tool.displayName)
                         .font(.system(size: 12, weight: .medium))
@@ -42,19 +42,18 @@ struct ToolTogglesView: View {
                 }
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4.5)
-                .background(
-                    isOn
-                        ? Color.primary.opacity(hovering ? 0.16 : 0.1)
-                        : Color.primary.opacity(hovering ? 0.05 : 0),
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        isOn ? Color.clear : Color.primary.opacity(0.18),
-                        style: StrokeStyle(lineWidth: 1, dash: isOn ? [] : [3, 2.5]))
-                )
                 .foregroundStyle(isOn ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .contentShape(Capsule())
+                // Linked = a solid glass pill; missing = a dashed outline.
+                if isOn {
+                    pill.glassSurface(interactive: true)
+                } else {
+                    pill
+                        .background(Color.primary.opacity(hovering ? 0.05 : 0), in: Capsule())
+                        .overlay(
+                            Capsule().strokeBorder(Color.primary.opacity(0.18),
+                                                   style: StrokeStyle(lineWidth: 1, dash: [3, 2.5])))
+                }
             }
             .buttonStyle(PressableButtonStyle())
             .onHover { h in

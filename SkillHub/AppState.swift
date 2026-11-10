@@ -1,17 +1,34 @@
 import Foundation
 import Observation
 
-/// Sidebar scopes: library views, smart groups, review queues, one tool, or one tag.
+/// Sidebar scopes: the library, one queue of things to fix, review lists,
+/// one tool (picked from the sidebar footer), or one tag.
 enum SidebarItem: Hashable {
     case all
-    case updates
-    case issues
-    case gaps        // skills missing from at least one active tool
-    case unused
+    case attention   // missing from a tool, update available, or health issue
     case conflicts
     case inbox
     case tool(Tool)  // skills a given tool currently has
     case tag(String)
+}
+
+/// Narrows the Needs Attention list to one kind of problem.
+enum AttentionFilter: String, CaseIterable, Identifiable {
+    case all, missing, updates, health
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .missing: return "Missing"
+        case .updates: return "Updates"
+        case .health: return "Health"
+        }
+    }
+}
+
+/// "1 skill", "3 skills".
+func plural(_ count: Int, _ singular: String, _ pluralForm: String? = nil) -> String {
+    "\(count) \(count == 1 ? singular : (pluralForm ?? singular + "s"))"
 }
 
 /// Transient user-facing message shown as a banner in the main window.
@@ -42,7 +59,14 @@ final class AppState {
     var notice: Notice?
     var searchText: String = ""
     var selectedSkillNames: Set<String> = []
-    var sidebarSelection: SidebarItem = .all
+    /// Changing scope drops any selected skill the new list doesn't show, so
+    /// the detail pane never describes a skill that isn't on screen.
+    var sidebarSelection: SidebarItem = .all {
+        didSet { if oldValue != sidebarSelection { pruneSelection() } }
+    }
+    var attentionFilter: AttentionFilter = .all {
+        didSet { if oldValue != attentionFilter { pruneSelection() } }
+    }
     var usage: [String: UsageCache.SkillHit] = [:]
     var updateAvailable: Set<String> = []
     /// Detected (or force-enabled) tools, refreshed on every reload so views
@@ -114,6 +138,19 @@ final class AppState {
         let wanted = Set(activeTools)
         return skills.filter { !wanted.isSubset(of: $0.liveTools) }
     }
+
+    /// Skills with something to act on: missing from a tool, an upstream
+    /// update, or a health finding.
+    var attentionSkills: [Skill] {
+        let wanted = Set(activeTools)
+        return skills.filter {
+            !wanted.isSubset(of: $0.liveTools) || $0.updateAvailable || !$0.issues.isEmpty
+        }
+    }
+
+    /// Badge for the Needs Attention row: problem skills plus broken links
+    /// and parked conflicts (which live outside the skill list).
+    var attentionCount: Int { attentionSkills.count + drift.count + conflicts.count }
 
     func linkedCount(for tool: Tool) -> Int {
         skills.filter { $0.liveTools.contains(tool) }.count
@@ -273,10 +310,13 @@ final class AppState {
         var scoped: [Skill]
         switch sidebarSelection {
         case .all: scoped = skills
-        case .updates: scoped = skills.filter(\.updateAvailable)
-        case .issues: scoped = skills.filter { !$0.issues.isEmpty }
-        case .gaps: scoped = gapSkills
-        case .unused: scoped = skills.filter { $0.usageCount == 0 }
+        case .attention:
+            switch attentionFilter {
+            case .all: scoped = attentionSkills
+            case .missing: scoped = gapSkills
+            case .updates: scoped = skills.filter(\.updateAvailable)
+            case .health: scoped = skills.filter { !$0.issues.isEmpty }
+            }
         case .conflicts, .inbox: scoped = []   // these scopes show their own lists
         case .tool(let tool): scoped = skills.filter { $0.liveTools.contains(tool) }
         case .tag(let tag): scoped = skills.filter { $0.tags.contains(tag) }
@@ -289,6 +329,13 @@ final class AppState {
                 || ($0.shortDescription?.lowercased().contains(q) ?? false)
                 || $0.tags.contains { $0.lowercased().contains(q) }
         }
+    }
+
+    private func pruneSelection() {
+        guard !selectedSkillNames.isEmpty else { return }
+        let visible = Set(filteredSkills.map(\.name))
+        let kept = selectedSkillNames.intersection(visible)
+        if kept != selectedSkillNames { selectedSkillNames = kept }
     }
 
     var selectedSkill: Skill? {
@@ -324,7 +371,7 @@ final class AppState {
         switch sidebarSelection {
         case .tool(let tool) where !active.contains(tool): sidebarSelection = .all
         case .tag(let tag) where !allTags.contains(where: { $0.tag == tag }): sidebarSelection = .all
-        case .updates where updateAvailable.isEmpty: sidebarSelection = .all
+        case .attention where attentionCount == 0: sidebarSelection = .all
         case .conflicts where conflicts.isEmpty: sidebarSelection = .all
         case .inbox where inbox.isEmpty: sidebarSelection = .all
         default: break
@@ -399,8 +446,6 @@ final class AppState {
 
     var conflicts: [ConflictsService.Conflict] = []
     var inbox: [InboxService.Submission] = []
-    var issueCount: Int { skills.filter { !$0.issues.isEmpty }.count }
-    var unusedCount: Int { skills.filter { $0.usageCount == 0 }.count }
 
     func resolveConflict(_ conflict: ConflictsService.Conflict, takeTheirs: Bool) {
         do {
@@ -731,12 +776,12 @@ final class AppState {
                 try ManifestIO.save(refreshed)
                 try? git.commit(paths: ["skills", "skillhub.json"],
                                 message: "\(Brand.commitPrefix): repair drift"
-                                    + (imported.isEmpty ? "" : ", import \(imported.count) skills"))
+                                    + (imported.isEmpty ? "" : ", import \(plural(imported.count, "skill"))"))
             }
             if leftover.isEmpty {
                 notify(.success, imported.isEmpty
                     ? "Drift repaired"
-                    : "Drift repaired — imported \(imported.count) skills into the store")
+                    : "Drift repaired — imported \(plural(imported.count, "skill")) into the store")
             } else {
                 notify(.info, "Repaired what was possible. Left alone: "
                        + leftover.prefix(3).joined(separator: "; ")

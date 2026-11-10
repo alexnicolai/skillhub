@@ -255,4 +255,21 @@ extension SyncEngineTests {
         let rebuilt = try engine.buildManifest(existing: manifest)
         XCTAssertEqual(rebuilt.skills["tagged"]?.tags, ["UI/UX"])
     }
+
+    /// The Claude desktop app keeps its own synced skills in ~/.claude/skills/synced;
+    /// it's not ours, so scans and verify must leave it alone.
+    func testClaudeSyncedFolderIsIgnored() throws {
+        let synced = claudeDir.appendingPathComponent("synced/some-bucket")
+        try FileManager.default.createDirectory(at: synced, withIntermediateDirectories: true)
+        let scan = engine.scanTool(.claude)
+        XCTAssertFalse(scan.realDirs.contains("synced"))
+        XCTAssertFalse(engine.verifyTool(.claude).contains { $0.contains("synced") })
+    }
+
+    func testPluralWording() {
+        XCTAssertEqual(plural(1, "update"), "1 update")
+        XCTAssertEqual(plural(3, "update"), "3 updates")
+        XCTAssertEqual(plural(0, "skill"), "0 skills")
+        XCTAssertEqual(plural(2, "broken link"), "2 broken links")
+    }
 }
